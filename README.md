@@ -10,8 +10,167 @@ World-of-Tanks-Clan-Abgänge verfolgen, eine Watchlist verwalten und Benachricht
 - Dashboard mit Logs, Scan-Statistiken und manueller Scanner-Steuerung
 - Speicherung in Firebase Realtime Database
 - Linux-Installer mit Systemd-Dienst und scrypt-Passworthash
+- Docker Compose für den Betrieb ohne separate Node.js-Installation
 
-## Voraussetzungen
+## Privates Docker-Image über GitHub (empfohlen)
+
+Repository: [Vardokr/Nexus-Webportalbot](https://github.com/Vardokr/Nexus-Webportalbot)
+
+Image nach der ersten erfolgreichen Veröffentlichung: `ghcr.io/vardokr/nexus-webportalbot:latest`.
+
+### Einmalig: Veröffentlichung aktivieren
+
+1. Die Projektdateien einschließlich `.github/workflows/docker-publish.yml`, `Dockerfile`, `.dockerignore` und `package-lock.json` in den Standardbranch des privaten Repositorys übernehmen. `.env` und Servicekonto-Dateien nicht hochladen.
+2. Unter **Actions → Docker image** den Lauf prüfen. Der Workflow testet und baut das Image. Nur der Standardbranch des privaten Original-Repositorys veröffentlicht; Pull Requests und andere Branches veröffentlichen nichts. Der Standardbranch wird automatisch erkannt.
+3. Nach erfolgreichem Lauf unter **Packages → nexus-webportalbot → Package settings** prüfen, dass die Sichtbarkeit **Private** ist und das Repository Zugriff hat. Neue Container-Pakete sind laut [GitHub-Dokumentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) zunächst privat; vorhandene Pakete können eine andere Sichtbarkeit haben. Der Workflow ändert diese Einstellung nicht.
+
+Die Veröffentlichung verwendet den eingebauten `GITHUB_TOKEN` mit `packages: write`; zusätzliche Registry-Zugangsdaten sind für Actions nicht nötig. Falls deine Repository-Richtlinien Actions einschränken, müssen Checkout und Paketveröffentlichung dort zugelassen werden. Das Image wird für **Linux amd64** gebaut; ARM-Server werden durch diesen Workflow noch nicht nativ unterstützt.
+
+### Auf dem Server: anmelden und herunterladen
+
+Docker mit Compose >=2.30 installieren. `compose.registry.yaml` und eine ausgefüllte `.env` im selben Verzeichnis ablegen. `.env.example` dient als Vorlage; Konfigurationsdetails stehen weiter unten. Der Quellcode und Node.js sind zum Betrieb des fertigen Images nicht erforderlich.
+
+Zum Lesen des privaten Images einen **Personal Access Token (classic)** mit `read:packages` für einen Benutzer mit Zugriff auf das Paket erstellen. Den Token nicht ins Repository oder in die Bot-`.env` schreiben. GitHub beschreibt die [Registry-Anmeldung hier](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry).
+
+Auf dem Linux-Server in Bash:
+
+```bash
+read -r -s -p 'GitHub-Token (read:packages): ' ghcr_token
+printf '\n'
+printf '%s' "$ghcr_token" | docker login ghcr.io -u Vardokr --password-stdin
+unset ghcr_token
+docker compose -f compose.registry.yaml pull
+```
+
+Bei einem Token eines anderen Benutzers den Login-Namen entsprechend ersetzen. Login und Compose unter demselben Betriebssystembenutzer ausführen. Docker speichert den Login über seinen Credential Store bzw. seine lokale Konfiguration; diese geschützt halten.
+
+Vor dem ersten Start einen Passwort-Hash erzeugen und in `.env` als `DASHBOARD_PASS_HASH=...` eintragen:
+
+```bash
+read -r -s -p 'Dashboard-Passwort (mindestens 12 Zeichen): ' dashboard_password
+printf '\n'
+printf '%s' "$dashboard_password" | docker compose -f compose.registry.yaml run --rm -T --no-deps watchdog node hash-password.js
+unset dashboard_password
+```
+
+Danach starten:
+
+```bash
+docker compose -f compose.registry.yaml up -d
+docker compose -f compose.registry.yaml ps
+docker compose -f compose.registry.yaml logs --tail=100 watchdog
+```
+
+Der Zugriff erfolgt wie unten beschrieben über SSH-Tunnel oder HTTPS. Für diese Variante bei **jedem** Compose-Befehl `-f compose.registry.yaml` verwenden. Die Datei ist eigenständig, kein Override für `compose.yaml`.
+
+### Updates und feste Versionen
+
+Nach einer erfolgreichen Veröffentlichung auf GitHub:
+
+```bash
+docker compose -f compose.registry.yaml pull
+docker compose -f compose.registry.yaml up -d
+```
+
+Actions veröffentlicht zusätzlich `sha-VOLLSTÄNDIGE_COMMIT_ID`. Für eine feste Version oder ein Rollback den `image:`-Eintrag in `compose.registry.yaml` von `:latest` auf diesen Tag ändern und erneut pull/up ausführen. Es gibt kein automatisches Deployment auf deinen Server.
+
+Der Workflow und die Registry-Datei sind lokal vorbereitet. Eine Veröffentlichung wurde aus dieser Arbeitsumgebung noch nicht ausgeführt.
+
+## Alternative: Docker-Image selbst bauen
+
+Voraussetzung: Docker Engine mit **Compose >= 2.30**, alternativ Docker Desktop mit Linux-Containern. Installationshinweise: [Docker Engine unter Ubuntu](https://docs.docker.com/engine/install/ubuntu/). Prüfen mit `docker --version` und `docker compose version`. Die Befehle unten setzen Docker-Zugriff voraus; unter Linux gegebenenfalls `sudo` vor Docker-Befehle setzen.
+
+### 1. Repository herunterladen und Konfiguration anlegen
+
+```bash
+git clone https://github.com/Vardokr/Nexus-Webportalbot.git nexus-watchdog
+cd nexus-watchdog
+cp .env.example .env
+chmod 600 .env
+nano .env
+```
+
+Für das private Repository ist eine GitHub-Anmeldung mit Repository-Lesezugriff erforderlich. Eine bereits konfigurierte `.env` beibehalten, nicht mit der Vorlage überschreiben. Firebase-JSON, Datenbank-URL und `WG_API_KEY` eintragen; ohne Discord `DISCORD_WEBHOOK=` setzen. Alle Variablen sind im Abschnitt **Konfiguration ausfüllen** weiter unten erklärt.
+
+Compose liest die Datei im [raw-Format](https://docs.docker.com/reference/compose-file/services/#env_file), damit JSON, `\n` und Dollarzeichen erhalten bleiben. Werte ohne zusätzliche äußere Anführungszeichen und ohne Kommentare am Zeilenende schreiben. Beispiel: `FIREBASE_CREDENTIALS={"type":"service_account",...}` – das vollständige JSON verwenden, nicht die Auslassungspunkte. Die Datei wird nicht ins Image kopiert; die Werte werden zur Laufzeit als Umgebungsvariablen übergeben und sind für Docker-Administratoren einsehbar.
+
+### 2. Image bauen und Passwort setzen
+
+```bash
+docker compose build --pull
+```
+
+Für einen Passwort-Hash in **Bash auf Linux**:
+
+```bash
+read -r -s -p 'Dashboard-Passwort (mindestens 12 Zeichen): ' dashboard_password
+printf '\n'
+printf '%s' "$dashboard_password" | docker compose run --rm -T --no-deps watchdog node hash-password.js
+unset dashboard_password
+```
+
+Den ausgegebenen `scrypt:...`-Hash in `.env` als `DASHBOARD_PASS_HASH=...` eintragen. `DASHBOARD_PASS=` leer lassen. Dafür ist kein Node.js auf dem Host notwendig. Der Hash-Befehl startet keinen Scanner.
+
+### 3. Starten und prüfen
+
+```bash
+docker compose up -d
+docker compose ps
+docker compose logs --tail=100 watchdog
+```
+
+Der Container läuft ohne Root-Rechte und startet nach Prozessende automatisch neu, solange er nicht ausdrücklich gestoppt wurde. Der Healthcheck prüft nur die HTTP-Erreichbarkeit, nicht Firebase oder Discord; `unhealthy` allein löst keinen Neustart aus.
+
+Der Dienst ist am Docker-Host nur unter `127.0.0.1:3000` erreichbar. Bei lokalem Docker im Browser `http://localhost:3000` öffnen; bei einem Server den unten beschriebenen SSH-Tunnel verwenden. Intern lauscht der Container auf `0.0.0.0:3000`; Compose überschreibt dafür die Host-/Port-Werte aus `.env`.
+
+### HTTPS und Umstieg von Systemd
+
+Die vorhandene Nginx-Vorlage kann auf dem Docker-Host weiter an `127.0.0.1:3000` weiterleiten. Bei HTTPS zusätzlich die exakte öffentliche Adresse in `.env` setzen, ohne abschließenden Schrägstrich:
+
+```dotenv
+DASHBOARD_ORIGIN=https://watchdog.example.com
+```
+
+Anschließend `docker compose up -d --force-recreate` ausführen. Bei gesetzter Adresse das Dashboard über diese Adresse benutzen. Container-interne Proxy-Verbindungen werden standardmäßig nicht als vertrauenswürdige Proxys behandelt; dadurch können Benutzer hinter dem Proxy ein IP-Limit teilen.
+
+Falls bereits der Systemd-Bot läuft, dessen Konfiguration zunächst geschützt übernehmen und vor dem Containerstart stoppen:
+
+```bash
+sudo systemctl disable --now nexus-bot
+```
+
+Nur beim tatsächlichen Umstieg ausführen. Es darf nicht gleichzeitig eine zweite Instanz für denselben Firebase-Pfad laufen. Für Docker `install.sh` nicht zusätzlich ausführen.
+
+### Docker-Betrieb und Updates
+
+```bash
+# Live-Logs
+docker compose logs -f watchdog
+
+# Stoppen / erneut starten
+docker compose stop
+docker compose up -d
+
+# Änderungen an .env übernehmen
+docker compose up -d --force-recreate
+
+# Nach Bereitstellung einer neuen Quellversion neu bauen und starten
+docker compose build --pull
+docker compose up -d
+
+# Container und Compose-Netzwerk entfernen
+docker compose down
+```
+
+Die Historie liegt in Firebase und benötigt kein Docker-Datenvolume. `.env` geschützt sichern. `down` löscht weder diese Datei noch Firebase-Daten. Das selbst gebaute Image heißt lokal `nexus-watchdog:local`; für das fertige Registry-Image siehe den ersten Abschnitt.
+
+Dockerfile und Compose-Konfiguration sind vorbereitet, aber hier mangels Docker nicht gebaut oder gestartet worden. Den ersten Start auf dem Zielsystem anhand der Logs prüfen.
+
+## Alternative: Installation ohne Docker
+
+Die folgenden Schritte gelten ausschließlich für den Systemd-Installer.
+
+### Voraussetzungen
 
 - Ubuntu oder Debian mit systemd, SSH-Zugang und sudo-Rechten
 - Node.js **22 oder neuer**, systemweit unter `/usr/bin/node`, sowie npm
@@ -37,10 +196,10 @@ Fehlt Node.js oder ist die Version kleiner als 22, installiere zunächst eine pa
 
 ### 2. Projekt herunterladen
 
-Ersetze `DEIN_BENUTZER` und `DEIN_REPOSITORY` durch deine GitHub-Angaben:
+Mit Repository-Lesezugriff herunterladen:
 
 ```bash
-git clone https://github.com/DEIN_BENUTZER/DEIN_REPOSITORY.git nexus-watchdog
+git clone https://github.com/Vardokr/Nexus-Webportalbot.git nexus-watchdog
 cd nexus-watchdog
 ```
 

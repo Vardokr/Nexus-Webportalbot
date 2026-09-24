@@ -1,0 +1,8 @@
+# Allowlist: credentials and unrelated files never enter the build context.
+**
+!Dockerfile
+!.dockerignore
+!package.json
+!package-lock.json
+!nexus-bot.js
+!hash-password.js

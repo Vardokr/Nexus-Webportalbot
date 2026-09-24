@@ -1,0 +1,52 @@
+name: Docker image
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/vardokr/nexus-webportalbot
+      REVISION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Test without cloud credentials
+        run: docker run --rm --mount type=bind,source="$GITHUB_WORKSPACE",target=/workspace,readonly -w /workspace node:22-bookworm-slim node --test test.js
+      - name: Build image
+        run: >-
+          docker build --pull
+          --label org.opencontainers.image.source=https://github.com/Vardokr/Nexus-Webportalbot
+          --label org.opencontainers.image.revision="$REVISION"
+          --tag "$IMAGE:sha-$REVISION" .
+      - name: Check runtime user and syntax
+        run: |
+          test "$(docker run --rm --entrypoint id "$IMAGE:sha-$REVISION" -u)" != 0
+          docker run --rm "$IMAGE:sha-$REVISION" node --check nexus-bot.js
+      - name: Publish from default branch only
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.repository == 'Vardokr/Nexus-Webportalbot' && github.event.repository.private
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          docker push "$IMAGE:sha-$REVISION"
+          docker tag "$IMAGE:sha-$REVISION" "$IMAGE:latest"
+          docker push "$IMAGE:latest"
