@@ -14,6 +14,42 @@ World-of-Tanks-Clan-Abgänge verfolgen, eine Watchlist verwalten und Benachricht
 
 ## Privates Docker-Image über GitHub (empfohlen)
 
+### Neu: Einrichtung vollständig im Browser
+
+Eine `.env` ist für eine neue Docker-Installation nicht mehr erforderlich. Nach Registry-Anmeldung die aktuelle `compose.registry.yaml` herunterladen und starten:
+
+```bash
+docker compose -f compose.registry.yaml pull
+docker compose -f compose.registry.yaml up -d
+docker compose -f compose.registry.yaml logs --tail=100 watchdog
+```
+
+In den Logs erscheint ein **Einrichtungscode**, gültig für 30 Minuten. Der Code wird nur dort angezeigt, nicht auf der Webseite. Für einen neuen Code den noch nicht eingerichteten Container neu starten.
+
+Auf dem eigenen Rechner einen SSH-Tunnel zum Server öffnen:
+
+```bash
+ssh -L 3000:127.0.0.1:3000 DEIN_BENUTZER@SERVER_IP
+```
+
+Dann [http://localhost:3000](http://localhost:3000) im Browser öffnen. Alternativ ist Zugriff über einen korrekt eingerichteten HTTPS-Reverse-Proxy möglich. Port 3000 bleibt auf dem Server lokal gebunden.
+
+Der Web-Assistent führt durch:
+
+1. Einrichtungscode aus den Logs eingeben.
+2. Firebase-Servicekonto als JSON-Datei hochladen und die Realtime-Database-URL eintragen.
+3. Workspace, Scan-Intervall und Wargaming-Key setzen; Discord ist optional.
+4. Administrator und Passwort mit mindestens 12 Zeichen anlegen.
+5. Verbindungen prüfen und speichern.
+
+Die Verbindungsprüfungen lesen nur Daten; sie senden keine Discord-Nachricht. Nach Abschluss startet der Scanner, der Assistent wird geschlossen und das Dashboard verlangt die neue Administrator-Anmeldung. Es gibt keinen öffentlich erreichbaren Reset-Endpunkt.
+
+Die Konfiguration wird mit Dateimodus `0600` im benannten Volume `watchdog-config` unter `/data/config.json` gespeichert. Das Dashboard-Passwort liegt als scrypt-Hash vor; Firebase-/API-Zugangsdaten müssen für den Betrieb lesbar gespeichert werden. Das Volume vertraulich behandeln und sichern. **`docker compose down -v` löscht die Einrichtung.** Normales `down` und Image-Updates behalten sie bei. Docker verwendet für Volumes standardmäßig einen Projektpräfix; denselben Projektordner/-namen für Updates verwenden.
+
+Bestehende vollständig konfigurierte `.env`-Installationen überspringen den Assistenten. Nichtleere Umgebungsvariablen haben beim Neustart Vorrang vor gespeicherten Werten. Keine Vorlage mit Platzhaltern neben Compose ablegen, wenn der Web-Assistent verwendet werden soll. Für spätere Änderungen die authentifizierten Dashboard-Einstellungen bzw. die geschützte Konfiguration auf dem Server verwenden; ein vollständiger Web-Editor für alle gespeicherten Felder ist noch nicht enthalten.
+
+Die folgenden Anmeldeschritte für die private Registry bleiben erforderlich. Die manuelle `.env`- und Hash-Einrichtung weiter unten ist nur die Alternative zum Web-Assistenten.
+
 Repository: [Vardokr/Nexus-Webportalbot](https://github.com/Vardokr/Nexus-Webportalbot)
 
 Image nach der ersten erfolgreichen Veröffentlichung: `ghcr.io/vardokr/nexus-webportalbot:latest`.
@@ -28,7 +64,7 @@ Die Veröffentlichung verwendet den eingebauten `GITHUB_TOKEN` mit `packages: wr
 
 ### Auf dem Server: anmelden und herunterladen
 
-Docker mit Compose >=2.30 installieren. `compose.registry.yaml` und eine ausgefüllte `.env` im selben Verzeichnis ablegen. `.env.example` dient als Vorlage; Konfigurationsdetails stehen weiter unten. Der Quellcode und Node.js sind zum Betrieb des fertigen Images nicht erforderlich.
+Docker mit Compose >=2.30 installieren und `compose.registry.yaml` auf dem Server ablegen. Die Konfiguration kann anschließend über den Web-Assistenten erfolgen. Der Quellcode und Node.js sind zum Betrieb des fertigen Images nicht erforderlich.
 
 Zum Lesen des privaten Images einen **Personal Access Token (classic)** mit `read:packages` für einen Benutzer mit Zugriff auf das Paket erstellen. Den Token nicht ins Repository oder in die Bot-`.env` schreiben. GitHub beschreibt die [Registry-Anmeldung hier](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry).
 
@@ -44,7 +80,7 @@ docker compose -f compose.registry.yaml pull
 
 Bei einem Token eines anderen Benutzers den Login-Namen entsprechend ersetzen. Login und Compose unter demselben Betriebssystembenutzer ausführen. Docker speichert den Login über seinen Credential Store bzw. seine lokale Konfiguration; diese geschützt halten.
 
-Vor dem ersten Start einen Passwort-Hash erzeugen und in `.env` als `DASHBOARD_PASS_HASH=...` eintragen:
+Nur bei manueller `.env`-Einrichtung statt Web-Assistent: Vor dem ersten Start einen Passwort-Hash erzeugen und in `.env` als `DASHBOARD_PASS_HASH=...` eintragen:
 
 ```bash
 read -r -s -p 'Dashboard-Passwort (mindestens 12 Zeichen): ' dashboard_password
@@ -162,7 +198,7 @@ docker compose up -d
 docker compose down
 ```
 
-Die Historie liegt in Firebase und benötigt kein Docker-Datenvolume. `.env` geschützt sichern. `down` löscht weder diese Datei noch Firebase-Daten. Das selbst gebaute Image heißt lokal `nexus-watchdog:local`; für das fertige Registry-Image siehe den ersten Abschnitt.
+Die Historie liegt in Firebase; die Web-Einrichtung liegt im Docker-Volume `watchdog-config`. Volume und gegebenenfalls `.env` geschützt sichern. Normales `down` behält das Volume und Firebase-Daten bei. Das selbst gebaute Image heißt lokal `nexus-watchdog:local`; für das fertige Registry-Image siehe den ersten Abschnitt.
 
 Dockerfile und Compose-Konfiguration sind vorbereitet, aber hier mangels Docker nicht gebaut oder gestartet worden. Den ersten Start auf dem Zielsystem anhand der Logs prüfen.
 
@@ -351,6 +387,6 @@ npm test
 node --check nexus-bot.js
 ```
 
-Die Tests prüfen Passwortverifikation, CSRF-Abwehr, die Zusammenführung paralleler Watchlist-Änderungen und die Syntax des generierten Browser-JavaScripts. Sie benötigen keinen Cloud-Zugang.
+Die Tests prüfen Passwortverifikation, CSRF-Abwehr, die Zusammenführung paralleler Watchlist-Änderungen, Browser-JavaScript sowie den Web-Assistenten mit echten lokalen HTTP-Anfragen. Die Cloud-Verbindungsprüfung wird im Test ersetzt; echte Zugangsdaten werden nicht benötigt. Vor dem Test `npm ci --ignore-scripts` ausführen.
 
 Linux-Installation, Live-Firebase, Discord-Zustellung, HTTPS und Browserdarstellung müssen zusätzlich auf dem Zielsystem geprüft werden. Der Installer wurde bisher nicht auf einem Linux-Server ausgeführt.

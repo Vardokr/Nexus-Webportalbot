@@ -7,6 +7,7 @@ services:
     stop_grace_period: 35s
     env_file:
       - path: ./.env
+        required: false
         format: raw
     environment:
       DASHBOARD_HOST: 0.0.0.0
@@ -14,6 +15,8 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     read_only: true
+    volumes:
+      - watchdog-config:/data
     cap_drop:
       - ALL
     security_opt:
@@ -25,3 +28,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  watchdog-config:

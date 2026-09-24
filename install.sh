@@ -10,7 +10,7 @@ source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 target_dir=/opt/nexus-bot
 id nexus >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin nexus
 install -d -o root -g nexus -m 0750 "$target_dir"
-for filename in nexus-bot.js package.json hash-password.js; do
+for filename in nexus-bot.js package.json hash-password.js bootstrap.js setup.js setup.html setup.css setup-client.js; do
   if [[ "$source_dir" != "$target_dir" ]]; then install -o root -g nexus -m 0640 "$source_dir/$filename" "$target_dir/$filename"; fi
 done
 if [[ ! -f "$target_dir/.env" ]]; then

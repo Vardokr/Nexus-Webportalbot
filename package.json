@@ -7,10 +7,10 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "start":     "node nexus-bot.js",
-    "dev":       "node --watch nexus-bot.js",
+    "start":     "node bootstrap.js",
+    "dev":       "node --watch bootstrap.js",
     "hash-pass": "node hash-password.js",
-    "test": "node --test test.js"
+    "test": "node --test test.js setup.test.js"
   },
   "dependencies": {
     "express":        "^4.21.0",
