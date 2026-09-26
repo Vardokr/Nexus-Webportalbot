@@ -1,7 +1,5 @@
 # NEXUS Watchdog installieren
 
-Diese Anleitung richtet sich an Nutzer mit Zugriff auf das private Repository und das private Docker-Image. Die [aktuelle Version wurde erfolgreich gebaut](https://github.com/Vardokr/Nexus-Webportalbot/actions/runs/36045808063). Der Bot wird über einen Assistenten im Browser eingerichtet; eine `.env`-Datei musst du dafür nicht erstellen.
-
 ## Kurzfassung
 
 Nach der einmaligen GitHub-Anmeldung mit `repo` und `read:packages` reicht auf dem Linux-Server:
