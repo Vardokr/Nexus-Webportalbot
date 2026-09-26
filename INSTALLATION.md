@@ -1,6 +1,15 @@
 # NEXUS Watchdog installieren
 
-Für einen neuen Linux-Server: Ein Befehl lädt das öffentliche Repository, installiert bei Bedarf Docker und startet das öffentliche Image. Die Einrichtung erfolgt anschließend im Browser.
+Ein Befehl lädt das öffentliche Repository und fragt zuerst nach deinem Hosting-Typ. Nur auf einem VPS/Rootserver mit sudo-Rechten kann der Docker-Schnellstart automatisch installieren. Die Einrichtung erfolgt anschließend im Browser.
+
+## Welchen Hosting-Typ habe ich?
+
+| Produkt | Docker-Schnellstart | Woran erkenne ich es? |
+| --- | --- | --- |
+| Linux-vServer/VPS oder Rootserver | Ja | Du kannst dich per SSH anmelden und mit `sudo` Software installieren. |
+| Verwalteter Bot-/Gameserver | Nicht pauschal | Der Anbieter stellt Startknopf, Laufzeit und Ports bereit, aber keine frei verwaltbare Linux-Maschine. |
+
+Bei ZAP-Hosting gibt es beide Produktarten. Ein verwalteter Tarif ist nicht automatisch ein VPS, auch wenn beides „gehostete Server“ sind. Wenn du deinen Typ nicht kennst, wähle im Startmenü **3** oder prüfe den Produktnamen im Hosting-Panel.
 
 ## Voraussetzungen
 
@@ -15,10 +24,10 @@ Auf anderen Linux-Distributionen Docker Engine und Docker Compose ab 2.30 selbst
 Auf dem Server in Bash:
 
 ```bash
-git clone https://github.com/Vardokr/Nexus-Webportalbot.git nexus-watchdog && bash nexus-watchdog/quickstart.sh
+git clone https://github.com/Vardokr/Nexus-Webportalbot.git nexus-watchdog && bash nexus-watchdog/start.sh
 ```
 
-`git` muss auf dem Server vorhanden sein. Das Skript installiert bei Bedarf Docker aus dem [offiziellen Docker-APT-Repository](https://docs.docker.com/engine/install/ubuntu/), lädt `ghcr.io/vardokr/nexus-webportalbot:latest` und startet den Container. Für die Docker-Installation kann `sudo` nach deinem Server-Passwort fragen. GitHub-Anmeldung oder Token sind für die öffentlichen Downloads nicht erforderlich.
+`git` muss auf dem Server vorhanden sein. Wähle **1** für VPS/Rootserver. Das Skript installiert bei Bedarf Docker aus dem [offiziellen Docker-APT-Repository](https://docs.docker.com/engine/install/ubuntu/), lädt `ghcr.io/vardokr/nexus-webportalbot:latest` und startet den Container. Für die Docker-Installation kann `sudo` nach deinem Server-Passwort fragen. GitHub-Anmeldung oder Token sind für die öffentlichen Downloads nicht erforderlich.
 
 Am Ende zeigt das Skript den **Einrichtungscode** aus den Container-Logs. Er gilt 30 Minuten. Der Dienst ist nur auf `127.0.0.1:3000` des Servers erreichbar; Port 3000 muss nicht öffentlich geöffnet werden.
 
@@ -69,3 +78,14 @@ sudo systemctl disable --now nexus-bot
 ```
 
 Weitere technische Hinweise stehen in der [README](README.md).
+
+## Verwaltetes Bot-/Gameserver-Hosting
+
+Wähle im Startmenü **2**. Der Docker-Schnellstart wird dann **nicht** ausgeführt. Für diesen Tarif muss zuerst geklärt sein, ob er Folgendes bietet:
+
+1. Node.js **22 oder neuer** und Installation der npm-Abhängigkeiten
+2. Einen dauerhaft laufenden Node-Prozess mit Startbefehl `node bootstrap.js`
+3. Dauerhaften, privaten Speicher für die Einrichtung (`CONFIG_DIR`)
+4. Einen von außen erreichbaren **HTTPS**-Endpunkt, der zum Dashboard-Port weiterleitet
+
+Ohne diese Voraussetzungen ist der Web-Assistent auf dem Tarif nicht sicher und dauerhaft betreibbar. Bot-Hosting darf nicht einfach mit einem öffentlich geöffneten HTTP-Port für Firebase-Schlüssel und Admin-Passwort eingerichtet werden. Wenn der Anbieter die Voraussetzungen erfüllt, braucht es noch seine konkreten Angaben zu Startbefehl, Speicherpfad und HTTPS/Port-Freigabe. Der VPS-Befehl oben installiert auf solchen Tarifen nichts.

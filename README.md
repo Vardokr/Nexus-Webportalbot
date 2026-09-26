@@ -2,15 +2,15 @@
 
 World-of-Tanks-Clan-Abgänge verfolgen, Watchlist verwalten und optional Discord-Benachrichtigungen senden. Das Dashboard orientiert sich am Nexus Hub.
 
-**Für Nutzer:** [Installationsanleitung](INSTALLATION.md)
+**Für Nutzer:** [Installationsanleitung mit Auswahl des Hosting-Typs](INSTALLATION.md)
 
 Auf unterstütztem Ubuntu oder Debian mit `git` und `sudo`:
 
 ```bash
-git clone https://github.com/Vardokr/Nexus-Webportalbot.git nexus-watchdog && bash nexus-watchdog/quickstart.sh
+git clone https://github.com/Vardokr/Nexus-Webportalbot.git nexus-watchdog && bash nexus-watchdog/start.sh
 ```
 
-Das öffentliche Repository und das öffentliche Container-Image lassen sich ohne GitHub-Anmeldung herunterladen. Der Schnellstart installiert Docker bei Bedarf, startet den Container und zeigt den einmaligen Einrichtungscode. Firebase und Wargaming werden anschließend im Browser über einen SSH-Tunnel konfiguriert. Die Veröffentlichung des Images prüft der [GitHub-Workflow](.github/workflows/docker-publish.yml).
+Die Auswahl erklärt zuerst, welcher Hosting-Typ unterstützt wird. Auf einem VPS/Rootserver installiert der Schnellstart Docker bei Bedarf, startet den Container und zeigt den einmaligen Einrichtungscode. Firebase und Wargaming werden anschließend im Browser über einen SSH-Tunnel konfiguriert. Verwaltetes Bot-/Gameserver-Hosting benötigt einen eigenen, tarifabhängigen Weg; Docker oder frei nutzbare Web-Ports werden dort nicht vorausgesetzt. Die Veröffentlichung des Images prüft der [GitHub-Workflow](.github/workflows/docker-publish.yml).
 
 ## Funktionen
 
