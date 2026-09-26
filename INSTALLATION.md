@@ -1,5 +1,7 @@
 # NEXUS Watchdog installieren
 
+Diese Anleitung richtet sich an Nutzer mit Zugriff auf das private Repository und das private Docker-Image. Der Bot wird über einen Assistenten im Browser eingerichtet; eine `.env`-Datei musst du dafür nicht erstellen.
+
 ## Kurzfassung
 
 Nach der einmaligen GitHub-Anmeldung mit `repo` und `read:packages` reicht auf dem Linux-Server:
@@ -8,11 +10,11 @@ Nach der einmaligen GitHub-Anmeldung mit `repo` und `read:packages` reicht auf d
 gh repo clone Vardokr/Nexus-Webportalbot nexus-watchdog && bash nexus-watchdog/quickstart.sh
 ```
 
-Das Skript meldet Docker mit deiner GitHub-Anmeldung bei der privaten Registry an, lädt das Image, startet den Bot und zeigt den Einrichtungscode. Danach einen SSH-Tunnel öffnen und den Web-Assistenten im Browser ausfüllen. Die nötigen Zugangsdaten und alle Schritte stehen unten.
+Das Skript installiert Docker bei Bedarf auf unterstütztem Ubuntu/Debian, meldet sich mit deiner GitHub-Anmeldung bei der privaten Registry an, lädt das Image, startet den Bot und zeigt den Einrichtungscode. Danach einen SSH-Tunnel öffnen und den Web-Assistenten im Browser ausfüllen. Die nötigen Zugangsdaten und alle Schritte stehen unten.
 
 ## Das brauchst du
 
-- Einen Linux-Server mit SSH-Zugang, **Docker Engine** und **Docker Compose ab 2.30**
+- Einen **Ubuntu-Server (22.04, 24.04 oder 26.04)** oder **Debian-Server (12 oder 13)** mit SSH-Zugang und `sudo`. Die automatische Docker-Installation unterstützt derzeit Linux/amd64.
 - Zugriff auf das private GitHub-Repository `Vardokr/Nexus-Webportalbot` **und** das zugehörige Paket in GitHub Packages
 - Die JSON-Datei eines Firebase-Servicekontos, die URL deiner Firebase Realtime Database und einen Wargaming-Anwendungsschlüssel
 - Für die Installation über die folgenden Befehle: [GitHub CLI (`gh`)](https://cli.github.com/)
@@ -20,12 +22,10 @@ Das Skript meldet Docker mit deiner GitHub-Anmeldung bei der privaten Registry a
 Prüfe auf dem Server:
 
 ```bash
-docker --version
-docker compose version
 gh --version
 ```
 
-Die folgenden Docker-Befehle laufen unter demselben Server-Benutzer. Falls Docker bei dir nur mit `sudo` funktioniert, führe **alle** Docker-Befehle einschließlich `docker login` mit `sudo` aus.
+Docker Engine und Compose werden vom Schnellstart installiert, wenn Docker noch fehlt. Der Installer verwendet [Dockers offizielles APT-Repository für Ubuntu](https://docs.docker.com/engine/install/ubuntu/) beziehungsweise [Debian](https://docs.docker.com/engine/install/debian/), installiert die Pakete und startet den Docker-Dienst. Dafür fragt `sudo` gegebenenfalls nach deinem Server-Passwort. Eine bestehende Docker-Installation wird nicht ersetzt. Werden konfliktierende Pakete erkannt, bricht das Skript ab und nennt das Paket; es entfernt nichts automatisch. Docker selbst benötigt administrative Rechte auf dem Server. Bei nicht unterstützten Distributionen Docker und Compose nach deren Dokumentation manuell installieren.
 
 ## 1. GitHub-Zugriff einrichten
 
