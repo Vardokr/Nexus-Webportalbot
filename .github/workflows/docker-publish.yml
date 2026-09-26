@@ -41,7 +41,7 @@ jobs:
           docker run --rm "$IMAGE:sha-$REVISION" node --check nexus-bot.js
           docker run --rm --mount type=bind,source="$GITHUB_WORKSPACE/test.js",target=/app/test.js,readonly --mount type=bind,source="$GITHUB_WORKSPACE/setup.test.js",target=/app/setup.test.js,readonly "$IMAGE:sha-$REVISION" node --test test.js setup.test.js
       - name: Publish from default branch only
-        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.repository == 'Vardokr/Nexus-Webportalbot' && github.event.repository.private
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.repository == 'Vardokr/Nexus-Webportalbot'
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USER: ${{ github.actor }}

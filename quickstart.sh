@@ -3,15 +3,6 @@ set -euo pipefail
 
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 
-if ! command -v gh >/dev/null 2>&1; then
-  printf 'GitHub CLI (gh) fehlt. Bitte zuerst installieren.\n' >&2
-  exit 1
-fi
-if ! gh auth status -h github.com >/dev/null 2>&1; then
-  printf 'Zuerst mit "gh auth login" bei GitHub anmelden. Für das private Image ist read:packages nötig.\n' >&2
-  exit 1
-fi
-
 install_docker() {
   if [[ ! -r /etc/os-release ]] || ! command -v apt-get >/dev/null 2>&1; then
     printf 'Automatische Docker-Installation unterstützt nur Ubuntu und Debian.\n' >&2
@@ -86,10 +77,6 @@ if ! "${docker_cmd[@]}" compose -f compose.registry.yaml config --quiet; then
   printf 'Compose-Konfiguration ungültig. Docker Compose 2.30 oder neuer ist erforderlich.\n' >&2
   exit 1
 fi
-
-github_user="$(gh api user --jq .login)"
-printf 'Melde Docker bei der privaten GitHub Container Registry an …\n'
-gh auth token | "${docker_cmd[@]}" login ghcr.io -u "$github_user" --password-stdin >/dev/null
 
 printf 'Lade NEXUS Watchdog …\n'
 "${docker_cmd[@]}" compose -f compose.registry.yaml pull

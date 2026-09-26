@@ -1,98 +1,71 @@
 # NEXUS Watchdog installieren
 
-Diese Anleitung richtet sich an Nutzer mit Zugriff auf das private Repository und das private Docker-Image. Der Bot wird über einen Assistenten im Browser eingerichtet; eine `.env`-Datei musst du dafür nicht erstellen.
+Für einen neuen Linux-Server: Ein Befehl lädt das öffentliche Repository, installiert bei Bedarf Docker und startet das öffentliche Image. Die Einrichtung erfolgt anschließend im Browser.
 
-## Kurzfassung
+## Voraussetzungen
 
-Nach der einmaligen GitHub-Anmeldung mit `repo` und `read:packages` reicht auf dem Linux-Server:
+- Ubuntu 22.04/24.04/26.04 oder Debian 12/13 auf **x86-64 (amd64)**
+- SSH-Zugang und `sudo`-Rechte auf dem Server
+- Firebase-Servicekonto als JSON-Datei, URL der Firebase Realtime Database und Wargaming-Anwendungsschlüssel
 
-```bash
-gh repo clone Vardokr/Nexus-Webportalbot nexus-watchdog && bash nexus-watchdog/quickstart.sh
-```
+Auf anderen Linux-Distributionen Docker Engine und Docker Compose ab 2.30 selbst installieren. Das Startskript installiert Docker nur auf den genannten Systemen. Eine bestehende Docker-Installation wird nicht ersetzt; Paketkonflikte werden gemeldet, aber nicht automatisch entfernt.
 
-Das Skript installiert Docker bei Bedarf auf unterstütztem Ubuntu/Debian, meldet sich mit deiner GitHub-Anmeldung bei der privaten Registry an, lädt das Image, startet den Bot und zeigt den Einrichtungscode. Danach einen SSH-Tunnel öffnen und den Web-Assistenten im Browser ausfüllen. Die nötigen Zugangsdaten und alle Schritte stehen unten.
-
-## Das brauchst du
-
-- Einen **Ubuntu-Server (22.04, 24.04 oder 26.04)** oder **Debian-Server (12 oder 13)** mit SSH-Zugang und `sudo`. Die automatische Docker-Installation unterstützt derzeit Linux/amd64.
-- Zugriff auf das private GitHub-Repository `Vardokr/Nexus-Webportalbot` **und** das zugehörige Paket in GitHub Packages
-- Die JSON-Datei eines Firebase-Servicekontos, die URL deiner Firebase Realtime Database und einen Wargaming-Anwendungsschlüssel
-- Für die Installation über die folgenden Befehle: [GitHub CLI (`gh`)](https://cli.github.com/)
-
-Prüfe auf dem Server:
-
-```bash
-gh --version
-```
-
-Docker Engine und Compose werden vom Schnellstart installiert, wenn Docker noch fehlt. Der Installer verwendet [Dockers offizielles APT-Repository für Ubuntu](https://docs.docker.com/engine/install/ubuntu/) beziehungsweise [Debian](https://docs.docker.com/engine/install/debian/), installiert die Pakete und startet den Docker-Dienst. Dafür fragt `sudo` gegebenenfalls nach deinem Server-Passwort. Eine bestehende Docker-Installation wird nicht ersetzt. Werden konfliktierende Pakete erkannt, bricht das Skript ab und nennt das Paket; es entfernt nichts automatisch. Docker selbst benötigt administrative Rechte auf dem Server. Bei nicht unterstützten Distributionen Docker und Compose nach deren Dokumentation manuell installieren.
-
-## 1. GitHub-Zugriff einrichten
-
-Erstelle in GitHub einen **Personal Access Token (classic)** mit den Berechtigungen `repo` (für das private Repository) und `read:packages` (für das private Image). Gib ihn nur auf deinem Server ein, nicht in einem Chat oder im Repository. Ein Token eines anderen Benutzers ist ebenfalls möglich, wenn dieser Zugriff auf Repository und Paket hat; ersetze dann den Benutzernamen beim Docker-Login.
+## 1. Herunterladen und starten
 
 Auf dem Server in Bash:
 
 ```bash
-read -r -s -p 'GitHub-Token: ' github_token
-printf '\n'
-printf '%s' "$github_token" | gh auth login --hostname github.com --with-token
-gh auth setup-git
-unset github_token
+git clone https://github.com/Vardokr/Nexus-Webportalbot.git nexus-watchdog && bash nexus-watchdog/quickstart.sh
 ```
 
-Wenn die Anmeldung fehlschlägt, prüfe die Token-Berechtigungen und den Paket-Zugriff. `quickstart.sh` erledigt die Docker-Anmeldung mit dem bei GitHub CLI gespeicherten Token. GitHub CLI und Docker speichern die Anmeldung lokal; sichere den Server-Benutzer entsprechend ab.
+`git` muss auf dem Server vorhanden sein. Das Skript installiert bei Bedarf Docker aus dem [offiziellen Docker-APT-Repository](https://docs.docker.com/engine/install/ubuntu/), lädt `ghcr.io/vardokr/nexus-webportalbot:latest` und startet den Container. Für die Docker-Installation kann `sudo` nach deinem Server-Passwort fragen. GitHub-Anmeldung oder Token sind für die öffentlichen Downloads nicht erforderlich.
 
-## 2. Projekt herunterladen und starten
+Am Ende zeigt das Skript den **Einrichtungscode** aus den Container-Logs. Er gilt 30 Minuten. Der Dienst ist nur auf `127.0.0.1:3000` des Servers erreichbar; Port 3000 muss nicht öffentlich geöffnet werden.
 
-```bash
-gh repo clone Vardokr/Nexus-Webportalbot nexus-watchdog && bash nexus-watchdog/quickstart.sh
-```
+## 2. Einrichtung im Browser
 
-Das Skript zeigt den **Einrichtungscode** an. Er gilt 30 Minuten. Der Container hört auf dem Server nur unter `127.0.0.1:3000`. Ein Server mit ARM-Prozessor braucht ein eigenes Image; das veröffentlichte Image wird derzeit für Linux/amd64 gebaut. Beim ersten Start keine `.env` mit Beispielwerten anlegen, sonst überspringt der Bot möglicherweise den Web-Assistenten.
-
-## 3. Assistenten im Browser öffnen
-
-Auf deinem **eigenen Rechner** einen SSH-Tunnel starten und geöffnet lassen:
+Auf deinem eigenen Rechner einen SSH-Tunnel starten und geöffnet lassen:
 
 ```bash
 ssh -L 3000:127.0.0.1:3000 DEIN_SERVER_BENUTZER@SERVER_IP
 ```
 
-Danach [http://localhost:3000](http://localhost:3000) im Browser öffnen. Der Tunnel schützt die Übertragung der Firebase-Datei und des Passworts. Port 3000 auf dem Server nicht öffentlich freigeben.
+Im Browser [http://localhost:3000](http://localhost:3000) öffnen. Im Assistenten eingeben:
 
-Im Assistenten eingeben:
+1. Einrichtungscode aus dem Server-Terminal
+2. Firebase-Servicekonto-JSON-Datei und Realtime-Database-URL
+3. Workspace-Schlüssel und Wargaming-Anwendungsschlüssel
+4. Optional Discord-Webhook
+5. Admin-Benutzername und Passwort mit mindestens 12 Zeichen
 
-1. Den Einrichtungscode aus den Container-Logs
-2. Die Firebase-Servicekonto-JSON-Datei und die Realtime-Database-URL
-3. Den Workspace-Schlüssel, zum Beispiel `ODIN`, sowie den Wargaming-Key
-4. Optional einen Discord-Webhook
-5. Einen Admin-Benutzernamen und ein Passwort mit mindestens 12 Zeichen
+Die öffentliche HTTPS-Adresse im Assistenten leer lassen, solange du den SSH-Tunnel nutzt. Die Verbindungstests lesen Daten und senden keine Discord-Nachricht. Nach Abschluss das Dashboard öffnen und mit dem neuen Admin-Konto anmelden.
 
-Die öffentliche HTTPS-Adresse leer lassen, wenn du per SSH-Tunnel zugreifst. Der Assistent prüft Firebase und Wargaming vor dem Speichern. Nach erfolgreichem Abschluss das Dashboard öffnen und mit dem neuen Admin-Konto anmelden. Bei einem abgelaufenen Code den noch nicht eingerichteten Container neu starten und den neuen Code aus den Logs lesen:
+Falls der Code abläuft, auf dem Server im Projektordner:
 
 ```bash
 docker compose -f compose.registry.yaml restart watchdog
 docker compose -f compose.registry.yaml logs --tail=30 watchdog
 ```
 
-## Betrieb und Updates
+Wenn der Serverbenutzer keinen direkten Docker-Zugriff hat, dieselben Befehle mit `sudo docker compose` ausführen. Der Schnellstart erkennt das selbst.
+
+## Updates und Logs
+
+Im Projektordner auf dem Server:
 
 ```bash
-# Status und Logs
-docker compose -f compose.registry.yaml ps
+git pull
+docker compose -f compose.registry.yaml pull
+docker compose -f compose.registry.yaml up -d
 docker compose -f compose.registry.yaml logs -f watchdog
-
-# Neue Version laden und starten
-cd nexus-watchdog && git pull && bash quickstart.sh
 ```
 
-Die Einrichtung liegt im Docker-Volume `watchdog-config`, die Abgangshistorie in Firebase. `docker compose down` erhält das Volume. **`docker compose down -v` entfernt das Volume und damit die gespeicherte Einrichtung.** Nutze für Updates weiterhin denselben Projektordner.
+Oder nach `git pull` erneut `bash quickstart.sh` ausführen. Die Einrichtung liegt im Docker-Volume `watchdog-config`, die Abgangshistorie in Firebase. `docker compose down` erhält das Volume; **`docker compose down -v` löscht die gespeicherte Einrichtung**. Für Updates denselben Projektordner verwenden.
 
-Falls auf dem Server bereits die ältere Systemd-Version läuft, diese vor dem Containerstart stoppen, damit nicht zwei Bots denselben Firebase-Pfad bearbeiten:
+Wenn bereits der ältere Systemd-Bot denselben Firebase-Pfad verwendet, ihn vor dem Docker-Start stoppen:
 
 ```bash
 sudo systemctl disable --now nexus-bot
 ```
 
-Weitere Details und die Alternative ohne Docker stehen in der [README](README.md).
+Weitere technische Hinweise stehen in der [README](README.md).
