@@ -1,6 +1,6 @@
 # NEXUS Watchdog
 
-**Neu hier?** Beginne mit der [Installationsanleitung für Nutzer](INSTALLATION.md).
+**Neu hier?** Beginne mit der [Installationsanleitung für Nutzer](INSTALLATION.md). Nach der einmaligen GitHub-Anmeldung installiert `gh repo clone Vardokr/Nexus-Webportalbot nexus-watchdog && bash nexus-watchdog/quickstart.sh` den Bot.
 
 World-of-Tanks-Clan-Abgänge verfolgen, eine Watchlist verwalten und Benachrichtigungen an Discord senden – mit einem Web-Dashboard im Nexus-Hub-Stil.
 

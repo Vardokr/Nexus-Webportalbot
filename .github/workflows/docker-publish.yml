@@ -27,6 +27,8 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      - name: Check installer syntax
+        run: bash -n quickstart.sh
       - name: Build image
         run: >-
           docker build --pull

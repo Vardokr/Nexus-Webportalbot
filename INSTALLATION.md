@@ -2,6 +2,16 @@
 
 Diese Anleitung richtet sich an Nutzer mit Zugriff auf das private Repository und das private Docker-Image. Die [aktuelle Version wurde erfolgreich gebaut](https://github.com/Vardokr/Nexus-Webportalbot/actions/runs/36045808063). Der Bot wird über einen Assistenten im Browser eingerichtet; eine `.env`-Datei musst du dafür nicht erstellen.
 
+## Kurzfassung
+
+Nach der einmaligen GitHub-Anmeldung mit `repo` und `read:packages` reicht auf dem Linux-Server:
+
+```bash
+gh repo clone Vardokr/Nexus-Webportalbot nexus-watchdog && bash nexus-watchdog/quickstart.sh
+```
+
+Das Skript meldet Docker mit deiner GitHub-Anmeldung bei der privaten Registry an, lädt das Image, startet den Bot und zeigt den Einrichtungscode. Danach einen SSH-Tunnel öffnen und den Web-Assistenten im Browser ausfüllen. Die nötigen Zugangsdaten und alle Schritte stehen unten.
+
 ## Das brauchst du
 
 - Einen Linux-Server mit SSH-Zugang, **Docker Engine** und **Docker Compose ab 2.30**
@@ -30,23 +40,18 @@ read -r -s -p 'GitHub-Token: ' github_token
 printf '\n'
 printf '%s' "$github_token" | gh auth login --hostname github.com --with-token
 gh auth setup-git
-printf '%s' "$github_token" | docker login ghcr.io -u Vardokr --password-stdin
 unset github_token
 ```
 
-Wenn die Anmeldung fehlschlägt, prüfe die Token-Berechtigungen und den Paket-Zugriff. GitHub CLI und Docker speichern die Anmeldung lokal; sichere den Server-Benutzer entsprechend ab.
+Wenn die Anmeldung fehlschlägt, prüfe die Token-Berechtigungen und den Paket-Zugriff. `quickstart.sh` erledigt die Docker-Anmeldung mit dem bei GitHub CLI gespeicherten Token. GitHub CLI und Docker speichern die Anmeldung lokal; sichere den Server-Benutzer entsprechend ab.
 
 ## 2. Projekt herunterladen und starten
 
 ```bash
-gh repo clone Vardokr/Nexus-Webportalbot nexus-watchdog
-cd nexus-watchdog
-docker compose -f compose.registry.yaml pull
-docker compose -f compose.registry.yaml up -d
-docker compose -f compose.registry.yaml logs --tail=100 watchdog
+gh repo clone Vardokr/Nexus-Webportalbot nexus-watchdog && bash nexus-watchdog/quickstart.sh
 ```
 
-In den Logs erscheint ein **Einrichtungscode**. Er gilt 30 Minuten. Der Container hört auf dem Server nur unter `127.0.0.1:3000`. Ein Server mit ARM-Prozessor braucht ein eigenes Image; das veröffentlichte Image wird derzeit für Linux/amd64 gebaut.
+Das Skript zeigt den **Einrichtungscode** an. Er gilt 30 Minuten. Der Container hört auf dem Server nur unter `127.0.0.1:3000`. Ein Server mit ARM-Prozessor braucht ein eigenes Image; das veröffentlichte Image wird derzeit für Linux/amd64 gebaut. Beim ersten Start keine `.env` mit Beispielwerten anlegen, sonst überspringt der Bot möglicherweise den Web-Assistenten.
 
 ## 3. Assistenten im Browser öffnen
 
@@ -81,9 +86,7 @@ docker compose -f compose.registry.yaml ps
 docker compose -f compose.registry.yaml logs -f watchdog
 
 # Neue Version laden und starten
-git pull
-docker compose -f compose.registry.yaml pull
-docker compose -f compose.registry.yaml up -d
+cd nexus-watchdog && git pull && bash quickstart.sh
 ```
 
 Die Einrichtung liegt im Docker-Volume `watchdog-config`, die Abgangshistorie in Firebase. `docker compose down` erhält das Volume. **`docker compose down -v` entfernt das Volume und damit die gespeicherte Einrichtung.** Nutze für Updates weiterhin denselben Projektordner.
