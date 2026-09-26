@@ -1,5 +1,7 @@
 # NEXUS Watchdog
 
+**Neu hier?** Beginne mit der [Installationsanleitung für Nutzer](INSTALLATION.md).
+
 World-of-Tanks-Clan-Abgänge verfolgen, eine Watchlist verwalten und Benachrichtigungen an Discord senden – mit einem Web-Dashboard im Nexus-Hub-Stil.
 
 ## Funktionen
@@ -110,7 +112,7 @@ docker compose -f compose.registry.yaml up -d
 
 Actions veröffentlicht zusätzlich `sha-VOLLSTÄNDIGE_COMMIT_ID`. Für eine feste Version oder ein Rollback den `image:`-Eintrag in `compose.registry.yaml` von `:latest` auf diesen Tag ändern und erneut pull/up ausführen. Es gibt kein automatisches Deployment auf deinen Server.
 
-Der Workflow und die Registry-Datei sind lokal vorbereitet. Eine Veröffentlichung wurde aus dieser Arbeitsumgebung noch nicht ausgeführt.
+Der GitHub-Workflow hat das private Image erfolgreich gebaut und veröffentlicht. Prüfe bei neuen Versionen den jeweiligen Lauf unter **Actions**.
 
 ## Alternative: Docker-Image selbst bauen
 
