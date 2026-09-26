@@ -15,7 +15,9 @@ async function main() {
     (process.env.DASHBOARD_PASS || process.env.DASHBOARD_PASS_HASH);
   if (ready) return require('./nexus-bot');
   await startSetup({ filename, onComplete: saved => {
+    const publicOrigin = process.env.DASHBOARD_ORIGIN;
     Object.assign(process.env, saved);
+    if (publicOrigin) process.env.DASHBOARD_ORIGIN = publicOrigin;
     require('./nexus-bot');
   } });
 }

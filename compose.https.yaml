@@ -1,0 +1,23 @@
+# Add to compose.registry.yaml for browser access via a public hostname.
+services:
+  watchdog:
+    environment:
+      DASHBOARD_ORIGIN: https://${SITE_HOST:?Hostname fehlt}
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on:
+      - watchdog
+    environment:
+      SITE_HOST: ${SITE_HOST:?Hostname fehlt}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

@@ -10,7 +10,7 @@ Auf unterstütztem Ubuntu oder Debian mit `git` und `sudo`:
 git clone https://github.com/Vardokr/Nexus-Webportalbot.git nexus-watchdog && bash nexus-watchdog/start.sh
 ```
 
-Die Auswahl erklärt zuerst, welcher Hosting-Typ unterstützt wird. Auf einem VPS/Rootserver installiert der Schnellstart Docker bei Bedarf, startet den Container und zeigt den einmaligen Einrichtungscode. Firebase und Wargaming werden anschließend im Browser über einen SSH-Tunnel konfiguriert. Verwaltetes Bot-/Gameserver-Hosting benötigt einen eigenen, tarifabhängigen Weg; Docker oder frei nutzbare Web-Ports werden dort nicht vorausgesetzt. Die Veröffentlichung des Images prüft der [GitHub-Workflow](.github/workflows/docker-publish.yml).
+Die Auswahl erklärt zuerst, welcher Hosting-Typ unterstützt wird. Auf einem VPS/Rootserver installiert der Schnellstart Docker bei Bedarf, startet den Container und zeigt den einmaligen Einrichtungscode. Mit einem beliebigen öffentlichen Hostnamen, der auf den Server zeigt, richtet Caddy HTTPS ein; Firebase und Wargaming werden anschließend direkt im Browser konfiguriert, ohne SSH-Tunnel. Weder Hoster noch Server-IP sind fest voreingestellt. Verwaltetes Bot-/Gameserver-Hosting benötigt einen eigenen, tarifabhängigen Weg. Die Veröffentlichung des Images prüft der [GitHub-Workflow](.github/workflows/docker-publish.yml).
 
 ## Funktionen
 
@@ -23,7 +23,7 @@ Die Auswahl erklärt zuerst, welcher Hosting-Typ unterstützt wird. Auf einem VP
 
 ## Betrieb
 
-Für Docker wird [compose.registry.yaml](compose.registry.yaml) verwendet. Der Container läuft ohne Root-Rechte und veröffentlicht Port 3000 nur auf `127.0.0.1` des Hosts. Die Einrichtung liegt im benannten Volume `watchdog-config` unter `/data/config.json`; das Admin-Passwort wird als scrypt-Hash gespeichert. Die übrigen Zugangsdaten müssen für den laufenden Bot lesbar sein. Volume und Serverzugang entsprechend schützen.
+Für Docker wird [compose.registry.yaml](compose.registry.yaml) verwendet; bei HTTPS zusätzlich [compose.https.yaml](compose.https.yaml) mit [Caddyfile](Caddyfile). Der Bot-Container läuft ohne Root-Rechte und veröffentlicht Port 3000 nur auf `127.0.0.1` des Hosts. Caddy veröffentlicht 80/443 und speichert Zertifikate in einem eigenen Volume. Die Einrichtung liegt im benannten Volume `watchdog-config` unter `/data/config.json`; das Admin-Passwort wird als scrypt-Hash gespeichert. Die übrigen Zugangsdaten müssen für den laufenden Bot lesbar sein. Volumes und Serverzugang entsprechend schützen.
 
 Eine vollständig konfigurierte `.env` überspringt den Web-Assistenten weiterhin. Als Vorlage dient [.env.example](.env.example). Für einen neuen Web-Setup-Start **keine `.env` mit Platzhaltern** anlegen.
 
@@ -33,8 +33,7 @@ Updates:
 
 ```bash
 git pull
-docker compose -f compose.registry.yaml pull
-docker compose -f compose.registry.yaml up -d
+bash quickstart.sh
 ```
 
 Nur eine Bot-Instanz pro Firebase-Pfad betreiben. Discord-Zustellung ist best-effort. Änderungen des Scan-Intervalls im Dashboard gelten bis zum Neustart; der dauerhaft konfigurierte Wert wird beim Web-Setup gespeichert.

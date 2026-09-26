@@ -2,6 +2,7 @@
 const form = document.getElementById('setup');
 const message = document.getElementById('message');
 const button = document.getElementById('submit');
+if (window.location.protocol === 'https:') form.elements.origin.value = window.location.origin;
 form.addEventListener('submit', async event => {
   event.preventDefault();
   const values = Object.fromEntries(new FormData(form));
