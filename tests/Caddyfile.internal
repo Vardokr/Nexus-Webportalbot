@@ -1,0 +1,9 @@
+{
+    default_sni localhost
+}
+localhost {
+    tls internal
+    reverse_proxy watchdog:3000 {
+        header_up X-Forwarded-For {remote_host}
+    }
+}

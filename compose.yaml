@@ -1,0 +1,35 @@
+# Requires Docker Compose >= 2.30 for env_file.format: raw.
+services:
+  watchdog:
+    build: .
+    image: nexus-watchdog:local
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 35s
+    env_file:
+      - path: ./.env
+        required: false
+        format: raw
+    environment:
+      # Listen inside the container; the published host port stays private.
+      DASHBOARD_HOST: 0.0.0.0
+      DASHBOARD_PORT: "3000"
+    ports:
+      - "127.0.0.1:3000:3000"
+    read_only: true
+    volumes:
+      - watchdog-config:/data
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  watchdog-config:
