@@ -1,7 +1,7 @@
 # Standalone alternative to compose.yaml; do not combine both files.
 services:
   watchdog:
-    image: ghcr.io/vardokr/nexus-webportalbot:latest
+    image: ${NEXUS_IMAGE:-ghcr.io/vardokr/nexus-webportalbot:latest}
     restart: unless-stopped
     init: true
     stop_grace_period: 35s

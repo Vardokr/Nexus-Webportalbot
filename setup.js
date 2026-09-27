@@ -4,6 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { promisify } = require('node:util');
 const scrypt = promisify(crypto.scrypt);
+const { configureProxy, createLimiter } = require('./security');
 const KEYS = ['FIREBASE_CREDENTIALS', 'FIREBASE_DATABASE_URL', 'WG_API_KEY', 'DISCORD_WEBHOOK', 'DASHBOARD_USER', 'DASHBOARD_PASS_HASH', 'CLAN_ID', 'SCAN_INTERVAL', 'DASHBOARD_ORIGIN'];
 
 function loadConfig(filename) {
@@ -96,27 +97,29 @@ async function startSetup({ filename, onComplete, check = checkConnections, host
   if (fs.existsSync(filename)) throw new Error('Setup already complete');
   const express = require('express');
   const app = express();
+  configureProxy(app);
   app.disable('x-powered-by');
   let busy = false;
   let completed = false;
-  let attempts = 0;
-  let windowStart = Date.now();
+  const allowInvalidAttempt = createLimiter(20, 60000);
   const expires = Date.now() + 30 * 60 * 1000;
   app.use((req, res, next) => {
     res.set({ 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" });
     next();
   });
   app.get('/api/status', (_, res) => res.status(401).json({ setup: true }));
+  app.get('/healthz', (_, res) => res.json({ service: 'nexus-watchdog' }));
   app.get('/', (_, res) => res.sendFile(path.join(__dirname, 'setup.html')));
   app.get('/setup.js', (_, res) => res.sendFile(path.join(__dirname, 'setup-client.js')));
   app.get('/setup.css', (_, res) => res.sendFile(path.join(__dirname, 'setup.css')));
   app.post('/api/setup', (req, res, next) => {
     if (completed || fs.existsSync(filename)) return res.status(409).json({ message: 'Einrichtung bereits abgeschlossen.' });
-    if (Date.now() - windowStart > 60000) { attempts = 0; windowStart = Date.now(); }
-    if (++attempts > 10) return res.status(429).json({ message: 'Bitte eine Minute warten.' });
     const supplied = Buffer.from(req.get('X-Setup-Token') || '');
     const expected = Buffer.from(token);
-    if (Date.now() > expires || supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) return res.status(403).json({ message: 'Einrichtungscode ungültig oder abgelaufen. Für einen neuen Code Container neu starten.' });
+    if (Date.now() > expires || supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) {
+      if (!allowInvalidAttempt(req.ip)) return res.status(429).json({ message: 'Bitte eine Minute warten.' });
+      return res.status(403).json({ message: 'Einrichtungscode ungültig oder abgelaufen. Auf dem Server: bash manage.sh setup-code' });
+    }
     if (req.get('Sec-Fetch-Site') === 'cross-site') return res.status(403).json({ message: 'Fremde Anfragequelle.' });
     if (!req.is('application/json')) return res.status(415).json({ message: 'JSON erforderlich.' });
     next();

@@ -1,3 +1,15 @@
+{
+    # IP browsers omit SNI; select the configured public address, not Docker's IP.
+    default_sni {$SITE_HOST}
+}
+
 {$SITE_HOST} {
-    reverse_proxy watchdog:3000
+    tls {
+        issuer acme https://acme-v02.api.letsencrypt.org/directory {
+            profile shortlived
+        }
+    }
+    reverse_proxy watchdog:3000 {
+        header_up X-Forwarded-For {remote_host}
+    }
 }

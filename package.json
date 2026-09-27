@@ -10,7 +10,7 @@
     "start":     "node bootstrap.js",
     "dev":       "node --watch bootstrap.js",
     "hash-pass": "node hash-password.js",
-    "test": "node --test test.js setup.test.js"
+    "test": "node --test test.js setup.test.js security.test.js"
   },
   "dependencies": {
     "express":        "^4.21.0",

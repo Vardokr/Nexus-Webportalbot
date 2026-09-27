@@ -18,12 +18,12 @@ test('scan merge preserves concurrent additions/removals and cleared history', a
   assert.equal(result.watchlist[0].memberCount, 10);
   assert.equal(result.leavers.length, 1);
 });
-test('password verification: scrypt, legacy and malformed hashes', () => {
-  const code = source.slice(source.indexOf('function verifyPassword'), source.indexOf('// AUTH MIDDLEWARE'));
+test('password verification: scrypt, legacy and malformed hashes', async () => {
+  const { verifyPassword } = require('./security');
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = `scrypt:${salt}:${crypto.scryptSync('password', salt, 64).toString('hex')}`;
   for (const [stored, input, expected] of [[hash, 'password', true], [hash, 'wrong', false], ['invalid', 'x', false], ['scrypt:x:x', 'x', false], [crypto.createHash('sha256').update('old').digest('hex'), 'old', true]]) {
-    assert.equal(vm.runInNewContext(code + ';verifyPassword(input)', { crypto, Buffer, DASHBOARD_PASS_HASH: stored, DASHBOARD_PASS: '', input }), expected);
+    assert.equal(await verifyPassword(input, stored, ''), expected);
   }
 });
 test('generated dashboard script compiles', () => {

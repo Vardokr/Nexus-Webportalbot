@@ -28,7 +28,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Check installer syntax
-        run: bash -n quickstart.sh
+        run: |
+          for script in *.sh; do bash -n "$script"; done
+          bash installer.test.sh
       - name: Build image
         run: >-
           docker build --pull
@@ -39,7 +41,9 @@ jobs:
         run: |
           test "$(docker run --rm --entrypoint id "$IMAGE:sha-$REVISION" -u)" != 0
           docker run --rm "$IMAGE:sha-$REVISION" node --check nexus-bot.js
-          docker run --rm --mount type=bind,source="$GITHUB_WORKSPACE/test.js",target=/app/test.js,readonly --mount type=bind,source="$GITHUB_WORKSPACE/setup.test.js",target=/app/setup.test.js,readonly "$IMAGE:sha-$REVISION" node --test test.js setup.test.js
+          docker run --rm --mount type=bind,source="$GITHUB_WORKSPACE/test.js",target=/app/test.js,readonly --mount type=bind,source="$GITHUB_WORKSPACE/setup.test.js",target=/app/setup.test.js,readonly --mount type=bind,source="$GITHUB_WORKSPACE/security.test.js",target=/app/security.test.js,readonly "$IMAGE:sha-$REVISION" node --test test.js setup.test.js security.test.js
+      - name: Check HTTPS installation with local certificates
+        run: NEXUS_IMAGE="$IMAGE:sha-$REVISION" bash https.test.sh
       - name: Publish from default branch only
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.repository == 'Vardokr/Nexus-Webportalbot'
         env:

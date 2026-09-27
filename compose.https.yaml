@@ -1,10 +1,11 @@
-# Add to compose.registry.yaml for browser access via a public hostname.
+# Add to compose.registry.yaml for browser access via public IPv4 or hostname.
 services:
   watchdog:
     environment:
       DASHBOARD_ORIGIN: https://${SITE_HOST:?Hostname fehlt}
+      DASHBOARD_TRUST_PROXY: "1"
   caddy:
-    image: caddy:2.10-alpine
+    image: caddy:2.11.0-alpine
     restart: unless-stopped
     depends_on:
       - watchdog
@@ -17,6 +18,11 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   caddy-data:

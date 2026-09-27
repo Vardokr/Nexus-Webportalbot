@@ -1,0 +1,12 @@
+services:
+  caddy:
+    ports: !override
+      - "127.0.0.1:18080:80"
+      - "127.0.0.1:18443:443"
+    volumes:
+      - ./tests/Caddyfile.internal:/etc/caddy/Caddyfile:ro
+  watchdog:
+    ports: !override
+      - "127.0.0.1:13000:3000"
+    environment:
+      DASHBOARD_ORIGIN: https://localhost:18443
