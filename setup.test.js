@@ -36,7 +36,8 @@ test('HTTP setup protects secrets, checks connections, persists and closes', asy
   assert.ok(!(await page.text()).includes('test-token'));
   assert.match(page.headers.get('content-security-policy'), /frame-ancestors 'none'/);
   const post = (token, body = input()) => fetch(url + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Setup-Token': token, Connection: 'close' }, body: JSON.stringify(body) });
-  assert.equal((await post('wrong')).status, 403);
+  for (let i = 0; i < 20; i++) assert.equal((await post('wrong')).status, 403);
+  assert.equal((await post('wrong')).status, 429);
   assert.equal(checks, 0);
   assert.equal((await post('test-token')).status, 400);
   assert.equal(fs.existsSync(filename), false);

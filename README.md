@@ -1,55 +1,56 @@
 # NEXUS Watchdog
 
-World-of-Tanks-Clan-Abgänge verfolgen, Watchlist verwalten und optional Discord-Benachrichtigungen senden. Das Dashboard orientiert sich am Nexus Hub.
+World-of-Tanks-Clans beobachten, Abgänge verfolgen und optional Discord-Benachrichtigungen erhalten.
 
-**Für Nutzer:** [Installationsanleitung mit Auswahl des Hosting-Typs](INSTALLATION.md)
+## Installation
 
-Auf unterstütztem Ubuntu oder Debian mit `git` und `sudo`:
+Für einen Linux-VPS/Rootserver mit Ubuntu 22.04/24.04/26.04 oder Debian 12/13, x86-64 und root/sudo-Zugang. Eine öffentliche IPv4 und freie, eingehend erreichbare TCP-Ports 80/443 werden benötigt.
+
+In die **Serverkonsole** kopieren:
 
 ```bash
-git clone https://github.com/Vardokr/Nexus-Webportalbot.git nexus-watchdog && bash nexus-watchdog/start.sh
+curl -fsSL https://raw.githubusercontent.com/Vardokr/Nexus-Webportalbot/main/bootstrap-install.sh -o nexus-install.sh && bash nexus-install.sh
 ```
 
-Die Auswahl erklärt zuerst, welcher Hosting-Typ unterstützt wird. Auf einem VPS/Rootserver installiert der Schnellstart Docker bei Bedarf, startet den Container und zeigt den einmaligen Einrichtungscode. Mit einem beliebigen öffentlichen Hostnamen, der auf den Server zeigt, richtet Caddy HTTPS ein; Firebase und Wargaming werden anschließend direkt im Browser konfiguriert, ohne SSH-Tunnel. Weder Hoster noch Server-IP sind fest voreingestellt. Verwaltetes Bot-/Gameserver-Hosting benötigt einen eigenen, tarifabhängigen Weg. Die Veröffentlichung des Images prüft der [GitHub-Workflow](.github/workflows/docker-publish.yml).
+Der Installer lädt das Projekt, installiert fehlende Voraussetzungen und Docker, erkennt die öffentliche IPv4 und richtet HTTPS ein. Danach erscheinen eine Browseradresse und ein Einrichtungscode. Adresse öffnen und dem Web-Assistenten folgen. Keine eigene Domain und kein SSH-Tunnel erforderlich.
 
-## Funktionen
+Eine bestehende Installation aktualisieren:
 
-- Regelmäßige Überprüfung von Clans über die Wargaming-EU-API
-- Abgangshistorie mit Namen, Rating und Profil-Link
-- Discord-Benachrichtigungen und CSV-Export
-- Web-Dashboard mit Logs, Statistiken und Scanner-Steuerung
-- Firebase Realtime Database als Datenspeicher
-- Web-Einrichtung mit einmaligem Code und Verbindungsprüfung
+```bash
+cd nexus-watchdog
+git pull --ff-only && bash start.sh
+```
+
+[Schritt-für-Schritt-Anleitung und Hilfe](INSTALLATION.md)
 
 ## Betrieb
 
-Für Docker wird [compose.registry.yaml](compose.registry.yaml) verwendet; bei HTTPS zusätzlich [compose.https.yaml](compose.https.yaml) mit [Caddyfile](Caddyfile). Der Bot-Container läuft ohne Root-Rechte und veröffentlicht Port 3000 nur auf `127.0.0.1` des Hosts. Caddy veröffentlicht 80/443 und speichert Zertifikate in einem eigenen Volume. Die Einrichtung liegt im benannten Volume `watchdog-config` unter `/data/config.json`; das Admin-Passwort wird als scrypt-Hash gespeichert. Die übrigen Zugangsdaten müssen für den laufenden Bot lesbar sein. Volumes und Serverzugang entsprechend schützen.
+- `bash manage.sh status`: Zustand der Dienste
+- `bash manage.sh logs`: letzte Meldungen
+- `bash manage.sh restart`: Dienste neu starten
+- `bash manage.sh setup-code`: neuen Code für einen noch offenen Assistenten erzeugen
 
-Eine vollständig konfigurierte `.env` überspringt den Web-Assistenten weiterhin. Als Vorlage dient [.env.example](.env.example). Für einen neuen Web-Setup-Start **keine `.env` mit Platzhaltern** anlegen.
+Die Befehle werden im Projektordner ausgeführt und laden die gespeicherte Adresse selbst. Eine eigene Domain oder andere öffentliche IPv4 kann mit `bash start.sh --address DEINE_ADRESSE` gesetzt werden.
 
-Für HTTPS kann die [Nginx-Vorlage](nexus-bot.nginx.conf) verwendet werden. Im Assistenten dann `DASHBOARD_ORIGIN=https://deine-domain` entsprechend der öffentlichen Adresse setzen. Ohne HTTPS über einen SSH-Tunnel zugreifen.
+Der Bot läuft ohne Root-Rechte. Port 3000 bleibt an 127.0.0.1 gebunden. Caddy 2.11 nutzt ausdrücklich Let's Encrypt mit dem Profil `shortlived`, auch für öffentliche IP-Adressen; Zertifikate werden automatisch erneuert. Die Einrichtung liegt im Volume `watchdog-config`, Zertifikate in `caddy-data`. Verbindungsdaten sind für den Dienst lesbar; das Admin-Passwort ist als scrypt-Hash gespeichert. Volumes sichern und nicht mit `down -v` löschen.
 
-Updates:
+Öffentliche IP-Zertifikate sind etwa sechs Tage gültig. Für die Erneuerung muss der Server dauerhaft über die benötigten Ports erreichbar bleiben. Der Installer prüft lokal das vertrauenswürdige Zertifikat und die Antwort des Bots. Eine zusätzliche Firewall des Hosters kann den Browserzugriff trotzdem blockieren.
 
-```bash
-git pull
-bash quickstart.sh
-```
+Die automatische IPv4-Ermittlung nutzt zuerst die Netzwerkschnittstelle. Hinter NAT werden nötigenfalls api.ipify.org und checkip.amazonaws.com abgefragt; eine eingehende Weiterleitung bleibt dort erforderlich. IPv6-only-Server und ARM werden in diesem Schnellstart noch nicht unterstützt.
 
-Nur eine Bot-Instanz pro Firebase-Pfad betreiben. Discord-Zustellung ist best-effort. Änderungen des Scan-Intervalls im Dashboard gelten bis zum Neustart; der dauerhaft konfigurierte Wert wird beim Web-Setup gespeichert.
+Verwaltete Bot-/Gameserver-Tarife brauchen Node.js, persistenten Speicher und einen HTTPS-Webzugang des Anbieters. Sie sind kein Ersatz für die Administrationsrechte, die der automatische VPS-Installer benötigt.
 
-## Entwicklung und Tests
+## Funktionen und Entwicklung
 
-Node.js 22 oder neuer:
+Dashboard im Nexus-Hub-Stil, Watchlist, regelmäßige Wargaming-EU-Abfragen, Abgangshistorie, Discord und CSV-Export. Firebase Realtime Database speichert die Clans. Pro Firebase-Pfad nur eine Bot-Instanz betreiben.
+
+Mit Node.js 22 oder neuer:
 
 ```bash
 npm ci --ignore-scripts
 npm test
-node --check nexus-bot.js
 ```
 
-Die Tests prüfen Passwortverifikation, CSRF-Abwehr, die Zusammenführung paralleler Watchlist-Änderungen und den Web-Assistenten mit lokalen HTTP-Anfragen. Cloud-Verbindungen werden im Test ersetzt. Der Docker-Workflow baut das Image und führt dieselben Tests aus.
+Die CI prüft zusätzlich Bash-Skripte, die Adresserkennung, Docker-Start, Caddy-Konfiguration für IP und Domain sowie HTTPS zum Assistenten mit einer lokalen Test-CA. Dabei werden keine öffentlichen Zertifikate angefordert und keine echten Firebase-Zugangsdaten benutzt.
 
-Alternativ gibt es [install.sh](install.sh) für einen Systemd-Dienst ohne Docker. Diese Variante benötigt systemweites Node.js 22 oder neuer und eine manuell konfigurierte `.env`.
-
-`.env`, Firebase-Servicekonto-Dateien und lokale Konfigurationsdaten gehören nicht ins Repository. Vor dem Veröffentlichen eigener Forks bitte auch die Commit-Historie auf Geheimnisse prüfen.
+`install.sh` bleibt eine alternative Systemd-Installation für erfahrene Nutzer. `.env`, Servicekonto-Dateien und lokale Konfiguration gehören nicht ins Repository.

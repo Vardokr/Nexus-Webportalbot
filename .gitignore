@@ -4,3 +4,4 @@ serviceAccount*.json
 *.log
 data/
 .site-host
+.site-host.*

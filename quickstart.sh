@@ -3,16 +3,25 @@ set -euo pipefail
 
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 
-compose_files=(-f compose.registry.yaml)
-site_host=''
-if [[ -f .site-host ]]; then
-  IFS= read -r site_host < .site-host || true
-  if [[ ! $site_host =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ || $site_host != *.* || $site_host == *..* || $site_host == *.-* || $site_host == *-.* ]]; then
-    printf 'Ungültiger Hostname in .site-host. Bitte start.sh erneut ausführen.\n' >&2
-    exit 1
-  fi
-  export SITE_HOST="$site_host"
-  compose_files+=(-f compose.https.yaml)
+source ./installer-lib.sh
+umask 077
+address=''
+case "${1:-}" in
+  '') ;;
+  --address) [[ $# == 2 ]] || fail 'Aufruf: bash start.sh --address IP_ODER_HOSTNAME'; address="${2,,}"; valid_address "$address" || fail 'Bitte eine öffentliche IPv4 oder einen Hostnamen ohne https:// eingeben.' ;;
+  *) fail 'Aufruf: bash start.sh [--address IP_ODER_HOSTNAME]' ;;
+esac
+[[ $(uname -s) == Linux ]] || fail 'Bitte in der Konsole eines Linux-VPS ausführen.'
+[[ $(uname -m) == x86_64 ]] || fail 'Das bereitgestellte Bot-Image benötigt derzeit einen x86-64/amd64-Server.'
+elevate=()
+if (( EUID != 0 )); then
+  command -v sudo >/dev/null 2>&1 || fail 'Administrationsrechte fehlen. Benötigt wird ein VPS/Rootserver; verwaltetes Bot-Hosting braucht einen eigenen Installationsweg.'
+  elevate=(sudo)
+fi
+if ! command -v curl >/dev/null 2>&1; then
+  command -v apt-get >/dev/null 2>&1 || fail 'Bitte curl installieren.'
+  "${elevate[@]}" apt-get update
+  "${elevate[@]}" apt-get install -y --no-remove curl ca-certificates
 fi
 
 install_docker() {
@@ -62,63 +71,55 @@ install_docker() {
 }
 
 if ! command -v docker >/dev/null 2>&1; then install_docker; fi
-docker_cmd=(docker)
-if ! docker info >/dev/null 2>&1; then
-  if command -v systemctl >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
-    sudo systemctl start docker || true
-  fi
-  if command -v sudo >/dev/null 2>&1 && sudo docker info >/dev/null 2>&1; then
-    docker_cmd=(sudo docker)
-  else
-    printf 'Docker ist nicht erreichbar. Den Dienst starten und Docker-Zugriff prüfen.\n' >&2
-    exit 1
-  fi
+if ! docker info >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
+  "${elevate[@]}" systemctl start docker || true
 fi
-if ! "${docker_cmd[@]}" compose version >/dev/null 2>&1; then
-  printf 'Docker Compose fehlt. Version 2.30 oder neuer installieren.\n' >&2
-  exit 1
-fi
+select_docker
 if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nexus-bot; then
   printf 'Der alte nexus-bot-Dienst läuft noch. Bitte vor dem Docker-Start stoppen: sudo systemctl disable --now nexus-bot\n' >&2
   exit 1
 fi
-if [[ -f .env ]]; then
-  printf 'Eine .env-Datei wurde gefunden. Vollständig konfigurierte Werte überspringen den Web-Assistenten.\n'
+if [[ -z $address && -f .site-host ]]; then IFS= read -r address < .site-host || true; fi
+if [[ -z $address ]]; then
+  printf 'Ermittle die öffentliche Serveradresse …\n'
+  address="$(detect_address)" || fail 'Adresse nicht automatisch ermittelbar. Starte erneut mit: bash start.sh --address DEINE_OEFFENTLICHE_IP'
 fi
-if ! "${docker_cmd[@]}" compose "${compose_files[@]}" config --quiet; then
-  printf 'Compose-Konfiguration ungültig. Docker Compose 2.30 oder neuer ist erforderlich.\n' >&2
-  exit 1
+valid_address "$address" || fail 'Ungültige gespeicherte Adresse. Starte erneut mit: bash start.sh --address DEINE_ADRESSE'
+if ! public_ipv4 "$address"; then
+  getent ahosts "$address" >/dev/null 2>&1 || fail 'Dieser Hostname ist noch nicht erreichbar. DNS-Eintrag beim Domain-Anbieter prüfen.'
 fi
+temporary="$(mktemp .site-host.XXXXXX)"
+printf '%s\n' "$address" > "$temporary"
+mv -- "$temporary" .site-host
+load_compose
+compose config --quiet || fail 'Docker Compose 2.30 oder neuer wird benötigt. Konfiguration konnte nicht geladen werden.'
 
-printf 'Lade NEXUS Watchdog …\n'
-"${docker_cmd[@]}" compose "${compose_files[@]}" pull
-"${docker_cmd[@]}" compose "${compose_files[@]}" up -d
+if [[ -z $(compose ps --status running -q caddy) ]] && command -v ss >/dev/null 2>&1; then
+  [[ -z $(ss -H -ltn '( sport = :80 or sport = :443 )') ]] || fail 'Port 80 oder 443 ist bereits belegt. Ein vorhandener Webserver muss zuerst für NEXUS angepasst werden.'
+fi
+printf 'Lade NEXUS und richte HTTPS für %s ein …\n' "$SITE_HOST"
+compose pull || fail 'Download fehlgeschlagen. Internetzugang und freien Speicher prüfen; danach bash start.sh erneut ausführen.'
+compose run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile || fail 'HTTPS-Konfiguration ungültig. Diagnose: bash manage.sh logs'
+compose up -d --wait --wait-timeout 90 || fail 'Ein Dienst startet nicht korrekt. Diagnose: bash manage.sh logs'
 
-printf '\nNEXUS Watchdog wurde gestartet.\n'
-if "${docker_cmd[@]}" compose "${compose_files[@]}" exec -T watchdog test -f /data/config.json >/dev/null 2>&1; then
-  printf 'Der Bot ist bereits eingerichtet.\n'
-else
-  printf 'Einrichtungscode:\n'
-  found=false
-  for attempt in {1..20}; do
-    recent_logs="$("${docker_cmd[@]}" compose "${compose_files[@]}" logs --no-color --tail=40 watchdog 2>&1)"
-    if printf '%s\n' "$recent_logs" | grep -E 'Einrichtungscode \(30 Minuten gültig\):' ; then
-      found=true
-      break
-    fi
-    sleep 1
-  done
-  if [[ $found == false ]]; then
-    printf 'Kein Einrichtungscode gefunden. Bitte Logs prüfen:\n'
-    printf 'bash quickstart.sh (zeigt bei Startproblemen die Docker-Meldung)\n'
-  fi
+printf 'Prüfe HTTPS und Zertifikat (bis zu drei Minuten) …\n'
+deadline=$((SECONDS + 180))
+ready=false
+while (( SECONDS < deadline )); do
+  response="$(curl --noproxy '*' --resolve "$SITE_HOST:443:127.0.0.1" -fsS --connect-timeout 2 --max-time 5 "https://$SITE_HOST/healthz" 2>/dev/null)" || response=''
+  if [[ $response == '{"service":"nexus-watchdog"}' ]]; then ready=true; break; fi
+  sleep 3
+done
+if [[ $ready != true ]]; then
+  fail 'HTTPS ist noch nicht bereit. Im Hosting-Panel TCP-Ports 80 und 443 für eingehende Verbindungen freigeben. Bei eigener Domain muss DNS auf diesen Server zeigen. Details: bash manage.sh logs — danach bash start.sh erneut ausführen.'
 fi
-if [[ -n $site_host ]]; then
-  printf '\nIm Browser https://%s öffnen.\n' "$site_host"
-  printf 'Falls HTTPS noch nicht erreichbar ist: DNS, Ports 80/443 und Caddy-Logs prüfen.\n'
-  printf 'Caddy-Logs: docker compose -f compose.registry.yaml -f compose.https.yaml logs caddy\n'
-else
-  printf '\nAuf deinem eigenen Rechner einen SSH-Tunnel öffnen:\n'
-  printf 'ssh -L 3000:127.0.0.1:3000 DEIN_SERVER_BENUTZER@SERVER_IP\n'
-  printf 'Dann im Browser http://localhost:3000 öffnen.\n'
+if setup_pending; then
+  # Restart only an unfinished setup to issue a fresh code after certificate work.
+  compose restart watchdog
+  compose up -d --wait --wait-timeout 90 watchdog
+  show_setup_code
 fi
+printf '\nNEXUS läuft; HTTPS und Zertifikat wurden auf dem Server geprüft.\n'
+printf 'Jetzt im Browser öffnen: https://%s\n' "$SITE_HOST"
+printf 'Falls der Browser nicht verbindet: TCP-Port 443 im Hosting-Panel freigeben.\n'
+printf 'Hilfe: bash manage.sh status | logs | setup-code\n'

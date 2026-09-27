@@ -8,6 +8,7 @@
 const admin    = require('firebase-admin');
 const express  = require('express');
 const crypto   = require('crypto');
+const { configureProxy, createAuth } = require('./security');
 require('dotenv').config();
 
 // ============================================
@@ -319,7 +320,7 @@ function resetTimer() {
 // EXPRESS SERVER
 // ============================================
 const app = express();
-app.set('trust proxy', 'loopback');
+configureProxy(app);
 app.disable('x-powered-by');
 const csrfToken = crypto.randomBytes(32).toString('hex');
 
@@ -359,63 +360,15 @@ setInterval(() => {
   }
 }, 600_000);
 
-// ============================================
-// PASSWORT-VERIFIKATION (timing-sicher)
-// ============================================
-function verifyPassword(input) {
-  if (DASHBOARD_PASS_HASH.startsWith('scrypt:')) {
-    const [, salt, hash] = DASHBOARD_PASS_HASH.split(':');
-    if (!/^[a-f0-9]{32}$/.test(salt || '') || !/^[a-f0-9]{128}$/.test(hash || '')) return false;
-    return crypto.timingSafeEqual(crypto.scryptSync(input, salt, 64), Buffer.from(hash, 'hex'));
-  }
-  if (DASHBOARD_PASS_HASH) {
-    const inputHash = Buffer.from(crypto.createHash('sha256').update(input).digest('hex'));
-    const expected = Buffer.from(DASHBOARD_PASS_HASH.trim());
-    return inputHash.length === expected.length && crypto.timingSafeEqual(inputHash, expected);
-  }
-  // Klartext-Vergleich (timing-sicher)
-  try {
-    return crypto.timingSafeEqual(Buffer.from(input), Buffer.from(DASHBOARD_PASS));
-  } catch {
-    return false;
-  }
-}
-
-// ============================================
-// AUTH MIDDLEWARE
-// ============================================
-const authMiddleware = rateLimit(20, 60_000); // Max 20 Auth-Versuche pro Minute pro IP
-
-const basicAuth = (req, res, next) => {
-  const b64auth   = (req.headers.authorization || '').split(' ')[1] || '';
-  const decoded   = Buffer.from(b64auth, 'base64').toString();
-  const colonIdx  = decoded.indexOf(':');
-  const login     = decoded.substring(0, colonIdx);
-  const password  = decoded.substring(colonIdx + 1);
-
-  if (login === DASHBOARD_USER && verifyPassword(password)) {
-    return next();
-  }
-
-  res.set('WWW-Authenticate', 'Basic realm="NEXUS Watchdog Control"');
-  return res.status(401).send('Authentifizierung erforderlich.');
-};
-
+app.get('/healthz', (_, res) => res.json({ service: 'nexus-watchdog' }));
+app.use(createAuth({ username: DASHBOARD_USER, hash: DASHBOARD_PASS_HASH, plain: DASHBOARD_PASS }));
 app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
   res.set('X-Content-Type-Options', 'nosniff');
   res.set('X-Frame-Options', 'DENY');
   res.set('Referrer-Policy', 'no-referrer');
-  const originalNext = () => { res.set('X-CSRF-Token', csrfToken); next(); };
-  // Only failed authentication consumes the login budget; dashboard polling is unlimited.
-  const authorization = req.headers.authorization || '';
-  const decoded = Buffer.from(authorization.split(' ')[1] || '', 'base64').toString();
-  const colon = decoded.indexOf(':');
-  if (/^Basic /i.test(authorization) && colon >= 0 && decoded.slice(0, colon) === DASHBOARD_USER && verifyPassword(decoded.slice(colon + 1))) return originalNext();
-  authMiddleware(req, res, () => {
-    res.set('WWW-Authenticate', 'Basic realm="NEXUS Watchdog Control"');
-    res.status(401).json({ success: false, message: 'Authentifizierung erforderlich' });
-  });
+  res.set('X-CSRF-Token', csrfToken);
+  next();
 });
 app.use(express.json({ limit: '50kb' }));
 app.use((req, res, next) => {

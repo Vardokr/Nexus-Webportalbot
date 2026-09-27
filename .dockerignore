@@ -5,6 +5,7 @@
 !package.json
 !package-lock.json
 !nexus-bot.js
+!security.js
 !hash-password.js
 !bootstrap.js
 !setup.js
