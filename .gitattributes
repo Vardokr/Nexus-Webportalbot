@@ -1,3 +1,0 @@
-*.sh text eol=lf
-*.yaml text eol=lf
-Caddyfile text eol=lf

@@ -1,7 +1,0 @@
-node_modules/
-.env
-serviceAccount*.json
-*.log
-data/
-.site-host
-.site-host.*
