@@ -13,9 +13,9 @@ cleanup() {
   rmdir -- "$test_dir"
 }
 trap cleanup EXIT
-docker pull caddy:2.11.0-alpine
+docker pull caddy:2.11.4-alpine
 for test_address in 93.184.216.34 example.com; do
-  docker run --rm -e SITE_HOST="$test_address" -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.11.0-alpine caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile > "$test_dir/adapt.json"
+  docker run --rm -e SITE_HOST="$test_address" -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.11.4-alpine caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile > "$test_dir/adapt.json"
   python3 - "$test_dir/adapt.json" <<'PY'
 import json, sys
 config = json.load(open(sys.argv[1]))

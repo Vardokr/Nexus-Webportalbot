@@ -5,7 +5,7 @@ services:
       DASHBOARD_ORIGIN: https://${SITE_HOST:?Hostname fehlt}
       DASHBOARD_TRUST_PROXY: "1"
   caddy:
-    image: caddy:2.11.0-alpine
+    image: caddy:2.11.4-alpine
     restart: unless-stopped
     depends_on:
       - watchdog
