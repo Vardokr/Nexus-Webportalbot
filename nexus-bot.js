@@ -185,6 +185,29 @@ async function sendToDiscord(webhookUrl, leavers) {
 // ============================================
 // HAUPT-SCANNER
 // ============================================
+function memberIds(members) {
+  if (!Array.isArray(members)) throw new Error('Ungültige Mitgliederliste');
+  return [...new Set(members.map(member => {
+    const raw = typeof member === 'object' && member !== null ? member.account_id : member;
+    const id = typeof raw === 'number' || typeof raw === 'string' ? Number(raw) : NaN;
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Ungültige Mitglieds-ID');
+    return id;
+  }))];
+}
+
+function confirmedLeavers(ids, accounts, clanId) {
+  return ids.filter(id => {
+    const account = accounts?.[id];
+    const membership = account?.clan_id;
+    if (!account || !(membership === null ||
+        ((typeof membership === 'number' || typeof membership === 'string') &&
+         String(membership).trim() !== '' && Number.isSafeInteger(Number(membership)) && Number(membership) >= 0))) {
+      throw new Error(`Clan-Zugehörigkeit für ${id} nicht bestätigt; nächster Scan versucht es erneut`);
+    }
+    return Number(membership) !== Number(clanId);
+  });
+}
+
 async function runScanner() {
   if (isScanning) { console.log('⚠️ Scan läuft bereits.'); return; }
   if (isPaused)   { console.log('⏸️ Scanner pausiert.');   return; }
@@ -229,17 +252,23 @@ async function runScanner() {
 
         const current = clanData?.[clan.id];
         if (current && Array.isArray(current.members)) {
-          const currentIds = current.members.map(m => m.account_id);
-          const oldIds     = clan.members || [];
-          const leaverIds  = oldIds.filter(id => !currentIds.includes(id));
+          const currentIds = memberIds(current.members);
+          const oldIds     = memberIds(clan.members || []);
+          const candidates = oldIds.filter(id => !currentIds.includes(id));
+          let leaverIds = [];
+          let statsData;
+          if (candidates.length) {
+            statsData = await fetchWargamingAPI(
+              `https://api.worldoftanks.eu/wot/account/info/?application_id=${encodeURIComponent(apiKey)}&account_id=${encodeURIComponent(candidates.join(','))}&fields=nickname,global_rating,clan_id`,
+              `Clan-Zugehörigkeit für [${clan.tag}]`
+            );
+            leaverIds = confirmedLeavers(candidates, statsData, clan.id);
+            // Keep still-affiliated accounts even when the roster temporarily omits them.
+            currentIds.push(...candidates.filter(id => !leaverIds.includes(id)));
+          }
 
           if (leaverIds.length > 0) {
             console.log(`🚨 ${leaverIds.length} Abgang/Abgänge bei [${clan.tag}]`);
-            try {
-              const statsData = await fetchWargamingAPI(
-                `https://api.worldoftanks.eu/wot/account/info/?application_id=${encodeURIComponent(apiKey)}&account_id=${encodeURIComponent(leaverIds.join(','))}&fields=nickname,global_rating`,
-                `Player Stats für [${clan.tag}]`
-              );
               for (const id of leaverIds) {
                 const p = statsData?.[id];
                 newLeaversFound.push({
@@ -250,12 +279,6 @@ async function runScanner() {
                   leftAt:  Date.now()
                 });
               }
-            } catch {
-              console.warn(`⚠️ Stats nicht verfügbar für [${clan.tag}]`);
-              for (const id of leaverIds) {
-                newLeaversFound.push({ id, name: `Player-${id}`, pr: null, oldClan: clan.tag, leftAt: Date.now() });
-              }
-            }
           }
 
           updatedWatchlist.push({
