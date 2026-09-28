@@ -18,6 +18,7 @@ def run(args):
 
 updater = Updater(root, run)
 old = updater.current()
+updater.compose('exec', '-T', 'watchdog', 'node', '-e', "require('fs').writeFileSync('/data/update-test', 'preserved')")
 updater.lock.acquire()
 updater.work('check')
 assert updater.state['available'], updater.state
@@ -25,12 +26,16 @@ updater.lock.acquire()
 updater.work('install')
 assert updater.state['phase'] == 'success', updater.state
 assert updater.current() != old
+assert updater.compose('exec', '-T', 'watchdog', 'node', '-e', "process.stdout.write(require('fs').readFileSync('/data/update-test'))") == 'preserved'
 
-# A non-existent image with --pull never must fail and restore the known-good bot.
+# A crashing replacement must restore the known-good bot and its data volume.
 good = updater.current()
-updater.candidate = 'sha256:' + '0' * 64
+subprocess.run(['docker', 'build', '--build-arg', 'BASE_IMAGE=' + candidate,
+                '-f', 'tests/Dockerfile.unhealthy', '-t', 'nexus-updater-ci:broken', '.'], check=True)
+updater.candidate = Updater.command(['docker', 'image', 'inspect', '--format', '{{.Id}}', 'nexus-updater-ci:broken'])
 updater.lock.acquire()
 updater.work('install')
 assert updater.state['phase'] == 'rolled_back', updater.state
 assert updater.current() == good
+assert updater.compose('exec', '-T', 'watchdog', 'node', '-e', "process.stdout.write(require('fs').readFileSync('/data/update-test'))") == 'preserved'
 print('Real Docker update and rollback passed; configuration volume retained.')
