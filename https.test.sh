@@ -9,7 +9,7 @@ test_dir="$(mktemp -d)"
 dc=(docker compose -p "$test_project" -f compose.registry.yaml -f compose.https.yaml -f tests/compose.smoke.yaml)
 cleanup() {
   "${dc[@]}" down --volumes >/dev/null 2>&1 || true
-  rm -f -- "$test_dir/root.crt" "$test_dir/adapt.json"
+  rm -f -- "$test_dir/root.crt" "$test_dir/adapt.json" "$test_dir/compose.json" "$test_dir/image.json" "$test_dir/state.json" "$test_dir/state.tmp"
   rmdir -- "$test_dir"
 }
 trap cleanup EXIT
@@ -44,3 +44,6 @@ token="$("${dc[@]}" logs --no-color watchdog | sed -n 's/.*Einrichtungscode (30 
 status="$(curl --cacert "$test_dir/root.crt" -sS -o /dev/null -w '%{http_code}' -X POST -H "X-Setup-Token: $token" -H 'Content-Type: application/json' -d '{}' https://localhost:18443/api/setup)"
 [[ $status == 400 ]]
 printf 'HTTPS, setup page and proxy isolation passed.\n'
+"${dc[@]}" config --format json > "$test_dir/compose.json"
+docker build --build-arg BASE_IMAGE="$NEXUS_IMAGE" -f tests/Dockerfile.update -t nexus-updater-ci:test .
+python3 updater.integration.py "$test_dir" nexus-updater-ci:test

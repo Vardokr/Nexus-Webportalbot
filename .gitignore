@@ -5,3 +5,4 @@ serviceAccount*.json
 data/
 .site-host
 .site-host.*
+.dashboard-updater

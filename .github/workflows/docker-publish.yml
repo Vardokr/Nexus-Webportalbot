@@ -31,6 +31,7 @@ jobs:
         run: |
           for script in *.sh; do bash -n "$script"; done
           bash installer.test.sh
+          python3 -m unittest updater_test.py
       - name: Build image
         run: >-
           docker build --pull

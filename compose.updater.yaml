@@ -1,0 +1,4 @@
+services:
+  watchdog:
+    volumes:
+      - /run/nexus-updater:/run/nexus-updater:ro

@@ -93,6 +93,8 @@ printf '%s\n' "$address" > "$temporary"
 mv -- "$temporary" .site-host
 load_compose
 compose config --quiet || fail 'Docker Compose 2.30 oder neuer wird benötigt. Konfiguration konnte nicht geladen werden.'
+bash install-updater.sh
+load_compose
 
 if [[ -z $(compose ps --status running -q caddy) ]] && command -v ss >/dev/null 2>&1; then
   [[ -z $(ss -H -ltn '( sport = :80 or sport = :443 )') ]] || fail 'Port 80 oder 443 ist bereits belegt. Ein vorhandener Webserver muss zuerst für NEXUS angepasst werden.'
