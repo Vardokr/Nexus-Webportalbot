@@ -23,6 +23,12 @@ config = json.load(open(sys.argv[1]))
 assert config['services']['watchdog']['image'] == 'ghcr.io/vardokr/nexus-webportalbot:latest', 'Dashboard updater requires the official image'
 PY
 "${elevate[@]}" install -d -m 0700 /opt/nexus-updater
+"${elevate[@]}" python3 - "$temporary" /opt/nexus-updater/compose.json <<'PY'
+import json, pathlib, sys
+old = pathlib.Path(sys.argv[2])
+if old.exists():
+    assert json.loads(old.read_text())['name'] == json.load(open(sys.argv[1]))['name'], 'Ein anderer NEXUS-Server verwendet bereits den Update-Dienst.'
+PY
 "${elevate[@]}" install -d -m 0755 /run/nexus-updater
 "${elevate[@]}" install -m 0600 "$temporary" /opt/nexus-updater/compose.json
 "${elevate[@]}" install -m 0600 updater.py /opt/nexus-updater/updater.py

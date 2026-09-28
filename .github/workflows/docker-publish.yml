@@ -45,6 +45,15 @@ jobs:
           docker run --rm --mount type=bind,source="$GITHUB_WORKSPACE/test.js",target=/app/test.js,readonly --mount type=bind,source="$GITHUB_WORKSPACE/setup.test.js",target=/app/setup.test.js,readonly --mount type=bind,source="$GITHUB_WORKSPACE/security.test.js",target=/app/security.test.js,readonly "$IMAGE:sha-$REVISION" node --test test.js setup.test.js security.test.js
       - name: Check HTTPS installation with local certificates
         run: NEXUS_IMAGE="$IMAGE:sha-$REVISION" bash https.test.sh
+      - name: Check updater installation and systemd socket
+        run: |
+          bash install-updater.sh
+          for attempt in {1..10}; do
+            if sudo curl -fsS --unix-socket /run/nexus-updater/control.sock http://localhost/status; then break; fi
+            sleep 1
+          done
+          sudo curl -fsS --unix-socket /run/nexus-updater/control.sock http://localhost/status
+          sudo systemctl disable --now nexus-updater
       - name: Publish from default branch only
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.repository == 'Vardokr/Nexus-Webportalbot'
         env:
