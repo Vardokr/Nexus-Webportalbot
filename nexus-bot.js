@@ -299,8 +299,11 @@ async function runScanner() {
       }
     }
 
-    await db.ref(DB_PATH).transaction(latest => {
-      if (!latest) return;
+    const saved = await db.ref(DB_PATH).transaction(latest => {
+      // Firebase may initially supply an empty local cache. Returning undefined
+      // aborts immediately; null lets the server compare and retry with its data.
+      // Never rebuild a deleted workspace from the stale scan snapshot.
+      if (latest === null) return null;
       latest.watchlist = (latest.watchlist || []).map(clan => {
         const before = watchlist.find(c => c.id === clan.id);
         return before && before.addedAt === clan.addedAt
@@ -311,6 +314,10 @@ async function runScanner() {
       latest.lastScanStats = scanStats;
       return latest;
     });
+    if (!saved.committed || !saved.snapshot.exists()) {
+      throw new Error('Scan nicht gespeichert: Firebase-Transaktion abgebrochen oder Workspace entfernt. Erneut scannen.');
+    }
+    console.log(`💾 Scan in Firebase bestätigt: ${DB_PATH} | Neue Abgänge: ${newLeaversFound.length}`);
     if (discordWebhook && newLeaversFound.length) await sendToDiscord(discordWebhook, newLeaversFound);
 
     const dur = ((Date.now() - lastScanTime) / 1000).toFixed(1);

@@ -26,7 +26,11 @@ test('scanner retries uncertain membership and only records confirmed departures
     isScanning: false, isPaused: false, lastScanTime: null, scanStats: {}, currentScanProgress: {},
     console: { log() {}, warn() {}, error() {} }, delay: async () => {}, REQUEST_DELAY_MS: 0,
     DB_PATH: 'test', MAX_LEAVERS_HISTORY: 100, process: { env: {} },
-    db: { ref: () => ({ once: async () => ({ val: () => latest }), transaction: async fn => { latest = fn(latest); } }) },
+    db: { ref: () => ({ once: async () => ({ val: () => latest }), transaction: async fn => {
+      assert.equal(fn(null), null, 'empty cache must not abort the transaction');
+      latest = fn(latest);
+      return { committed: true, snapshot: { exists: () => true } };
+    } }) },
     fetchWargamingAPI: async url => {
       if (url.includes('/clans/info/')) return { 100: { members: [], members_count: 0 } };
       assert.ok(url.includes('clan_id'));
@@ -71,6 +75,35 @@ test('password verification: scrypt, legacy and malformed hashes', async () => {
   const hash = `scrypt:${salt}:${crypto.scryptSync('password', salt, 64).toString('hex')}`;
   for (const [stored, input, expected] of [[hash, 'password', true], [hash, 'wrong', false], ['invalid', 'x', false], ['scrypt:x:x', 'x', false], [crypto.createHash('sha256').update('old').digest('hex'), 'old', true]]) {
     assert.equal(await verifyPassword(input, stored, ''), expected);
+  }
+});
+
+test('scan never announces success or notifies Discord after an uncommitted save', async () => {
+  for (const result of [
+    { committed: false, snapshot: { exists: () => true } },
+    { committed: true, snapshot: { exists: () => false } }
+  ]) {
+    const logs = [];
+    const errors = [];
+    const data = { watchlist: [{ id: 100, tag: 'TEST', members: [12], addedAt: 1 }], settings: { apiKey: 'test', discordWebhook: 'test' } };
+    const context = vm.createContext({
+      isScanning: false, isPaused: false, lastScanTime: null, scanStats: {}, currentScanProgress: {},
+      console: { log: s => logs.push(s), warn() {}, error: (...s) => errors.push(s.join(' ')) },
+      delay: async () => {}, REQUEST_DELAY_MS: 0, DB_PATH: 'test', MAX_LEAVERS_HISTORY: 100, process: { env: {} },
+      db: { ref: () => ({ once: async () => ({ val: () => data }), transaction: async fn => {
+        assert.equal(fn(null), null);
+        return result;
+      } }) },
+      fetchWargamingAPI: async url => url.includes('/clans/info/')
+        ? { 100: { members: [], members_count: 0 } } : { 12: { clan_id: null } },
+      sendToDiscord: async () => assert.fail('No notification before confirmed persistence')
+    });
+    vm.runInContext(source.slice(source.indexOf('function memberIds('), source.indexOf('// TIMER')), context);
+    await vm.runInContext('runScanner()', context);
+    assert.ok(errors.some(s => s.includes('Scan nicht gespeichert')));
+    assert.ok(!logs.some(s => s.includes('Scan abgeschlossen')));
+    assert.equal(context.isScanning, false);
+    assert.deepEqual(data.watchlist[0].members, [12]);
   }
 });
 test('generated dashboard script compiles', () => {
