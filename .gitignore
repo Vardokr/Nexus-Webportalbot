@@ -5,3 +5,5 @@ serviceAccount*.json
 data/
 .site-host
 .site-host.*
+.dashboard-updater
+__pycache__/

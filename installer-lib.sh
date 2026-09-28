@@ -52,6 +52,7 @@ load_compose() {
     compose_files+=(-f compose.https.yaml)
   fi
   export SITE_HOST
+  if [[ -f .dashboard-updater ]]; then compose_files+=(-f compose.updater.yaml); fi
 }
 
 select_docker() {

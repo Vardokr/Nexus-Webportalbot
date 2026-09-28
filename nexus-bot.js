@@ -407,6 +407,46 @@ app.use((req, res, next) => {
 // ============================================
 
 // Status
+// The bot only talks to a fixed local socket; it never receives Docker access.
+function updaterRequest(method, path) {
+  return new Promise((resolve, reject) => {
+    const request = require('node:http').request({
+      socketPath: '/run/nexus-updater/control.sock', path, method, timeout: 5000,
+      headers: { 'Content-Length': '0' }
+    }, response => {
+      let body = '';
+      response.on('data', chunk => {
+        body += chunk;
+        if (body.length > 16384) request.destroy(new Error('Response too large'));
+      });
+      response.on('end', () => {
+        try { resolve({ status: response.statusCode, data: JSON.parse(body) }); }
+        catch (error) { reject(error); }
+      });
+      response.on('error', reject);
+    });
+    request.on('timeout', () => request.destroy(new Error('Timeout')));
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+for (const [method, route, target] of [
+  ['get', '/api/update', '/status'],
+  ['post', '/api/update/check', '/check'],
+  ['post', '/api/update/install', '/install']
+]) {
+  app[method](route, rateLimit(30, 60_000), async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+      const result = await updaterRequest(method.toUpperCase(), target);
+      res.status(result.status).json(result.data);
+    } catch {
+      res.status(503).json({ message: 'Update-Dienst nicht erreichbar. Einmalig auf dem Server: git pull --ff-only && bash start.sh' });
+    }
+  });
+}
+
 app.get('/api/status', (req, res) => {
   res.json({
     isScanning, isPaused, lastScanTime, nextScanTime,
@@ -797,13 +837,20 @@ app.get('/', (req, res) => {
     <input id="settings-interval" type="number" min="10" max="1440" placeholder="z.B. 120">
     <button class="btn btn-warn" onclick="updateInterval()">🔄 Intervall aktualisieren</button>
     <div id="interval-message"></div>
+    <hr style="margin:16px 0;border-color:rgba(255,255,255,.2)">
+    <h3>Bot aktualisieren</h3>
+    <p>Aktualisiert den Bot, ohne deine Einrichtung zu löschen. Während des Neustarts ist das Dashboard kurz nicht erreichbar.</p>
+    <button id="update-check" class="btn btn-primary" onclick="runUpdate('check')">Update prüfen</button>
+    <button id="update-install" class="btn btn-warn" onclick="runUpdate('install')" disabled>Jetzt aktualisieren</button>
+    <button class="btn" onclick="location.reload()">Dashboard neu laden</button>
+    <p id="update-message" role="status" aria-live="polite">Noch nicht geprüft.</p>
   </div>
 </div>
 
 <script>
   let allLeavers = [];
   let activeTab  = 'logs';
-  window.addEventListener('unhandledrejection', event => { event.preventDefault(); alert(event.reason?.message || 'Anfrage fehlgeschlagen'); });
+  window.addEventListener('unhandledrejection', event => { event.preventDefault(); if (!updateWaiting) alert(event.reason?.message || 'Anfrage fehlgeschlagen'); });
   const csrfToken = '${csrfToken}';
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 
@@ -815,7 +862,7 @@ app.get('/', (req, res) => {
     activeTab = tab;
     if (tab === 'watchlist') loadWatchlist();
     if (tab === 'leavers')   loadLeavers();
-    if (tab === 'settings')  loadSettings();
+    if (tab === 'settings') { loadSettings(); pollUpdate(); }
   }
 
   function formatTimeAgo(ts) {
@@ -825,6 +872,59 @@ app.get('/', (req, res) => {
     if (sec < 3600) return Math.floor(sec/60) + ' Min. ago';
     if (sec < 86400) return Math.floor(sec/3600) + ' Std. ago';
     return Math.floor(sec/86400) + ' Tag(e) ago';
+  }
+
+  let updateTimer;
+  let updateWaiting = false;
+  let updateDeadline = 0;
+  function displayUpdate(data) {
+    const busy = data.phase === 'checking' || data.phase === 'updating';
+    document.getElementById('update-message').textContent = data.message;
+    document.getElementById('update-check').disabled = busy;
+    document.getElementById('update-install').disabled = busy || !data.available;
+    updateWaiting = busy;
+    if (busy) {
+      if (!updateDeadline) updateDeadline = Date.now() + 15 * 60 * 1000;
+      updateTimer = setTimeout(pollUpdate, 5000);
+    } else {
+      updateDeadline = 0;
+      if (sessionStorage.getItem('nexus-update') === 'install' && data.phase === 'success') {
+        sessionStorage.removeItem('nexus-update');
+        location.reload();
+      } else if (data.phase === 'error' || data.phase === 'rolled_back') {
+        sessionStorage.removeItem('nexus-update');
+      }
+    }
+  }
+  async function pollUpdate() {
+    clearTimeout(updateTimer);
+    try { displayUpdate(await apiCall('/api/update')); }
+    catch (error) {
+      document.getElementById('update-message').textContent = updateWaiting
+        ? 'Verbindung unterbrochen; warte auf den Bot …' : error.message;
+      if (updateWaiting && Date.now() < updateDeadline) updateTimer = setTimeout(pollUpdate, 5000);
+      else {
+        document.getElementById('update-check').disabled = false;
+        document.getElementById('update-install').disabled = true;
+        if (updateWaiting) document.getElementById('update-message').textContent = 'Zeitlimit erreicht. Serverstatus prüfen und Dashboard neu laden.';
+        updateWaiting = false;
+      }
+    }
+  }
+  async function runUpdate(action) {
+    if (action === 'install' && !confirm('Bot jetzt aktualisieren? Er ist während des Neustarts kurz nicht erreichbar.')) return;
+    clearTimeout(updateTimer);
+    document.getElementById('update-check').disabled = true;
+    document.getElementById('update-install').disabled = true;
+    if (action === 'install') sessionStorage.setItem('nexus-update', 'install');
+    try { displayUpdate(await apiCall('/api/update/' + action, { method: 'POST' })); }
+    catch (error) {
+      document.getElementById('update-message').textContent = error.message;
+      // The request may have been accepted immediately before the restart.
+      updateWaiting = true;
+      updateDeadline = Date.now() + 15 * 60 * 1000;
+      updateTimer = setTimeout(pollUpdate, 5000);
+    }
   }
 
   function formatUptime(sec) {

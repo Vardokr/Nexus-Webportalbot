@@ -51,6 +51,16 @@ Bei Zertifikatswarnungen keine Zugangsdaten eingeben. Der Installer verwendet ö
 
 ## Vorhandene Installation und Updates
 
+### Updates im Dashboard
+
+Nach einmaligem `git pull --ff-only && bash start.sh` im Installationsordner findest du unter **Einstellungen → Bot aktualisieren** die Schaltflächen **Update prüfen** und **Jetzt aktualisieren**. Die Prüfung lädt das aktuelle offizielle Image bereits herunter, startet den Bot aber noch nicht neu. Erst deine Bestätigung aktiviert es. Bei erfolgreichem Update lädt sich das Dashboard neu; schlägt der Start fehl, versucht der Dienst die vorherige Version wiederherzustellen. Gespeicherte Einstellungen und Daten bleiben erhalten. Alte falsche Abgangsmeldungen werden nicht gelöscht.
+
+Der Installer benötigt dafür systemd und installiert bei Bedarf Python 3. Ein root-eigener Dienst `nexus-updater` führt ausschließlich festgelegte Docker-Befehle für den Bot aus. Der Bot erhält **keinen Docker-Socket**, sondern nur einen lokalen Steuer-Socket. Der Dienst besitzt technisch Docker-Administratorrechte; seine Dateien und die Konfigurationskopie unter `/opt/nexus-updater` sind deshalb nur für root zugänglich. Lokale Prozesse mit Gruppe 1000 können ebenfalls die begrenzten Update-Aktionen auslösen. Es wird kein zusätzlicher Netzwerkport geöffnet.
+
+Der Button aktualisiert nur das Bot-Image, nicht Caddy, Betriebssystem, Installer oder Update-Dienst. Änderungen an diesen Komponenten und an der Compose-Konfiguration benötigen weiterhin `git pull --ff-only && bash start.sh`. Der Installer erneuert dabei die geschützte Konfigurationskopie. Gleichzeitige Updates per Konsole und Dashboard vermeiden. Diagnose des Dienstes: `sudo systemctl status nexus-updater`.
+
+Bei einer unterbrochenen Aktualisierung oder fehlgeschlagener Wiederherstellung: `bash manage.sh status` und gegebenenfalls `bash start.sh`. Die Wiederherstellung ist keine Datenbank-Sicherung und kann Datenmigrationen zukünftiger Versionen nicht rückgängig machen.
+
 Eine vorhandene Einrichtung bleibt erhalten. Im bisherigen Projektordner:
 
 ```bash
